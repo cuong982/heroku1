@@ -2,20 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="4de0988f-1cef-4697-a525-98edbeaf5d77" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/RbiCloud/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/RbiCloud/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/RbiCloud/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/RbiCloud/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloud/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/cloud/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloud/process/RBI/DM_CAL.py" beforeDir="false" afterPath="$PROJECT_DIR$/cloud/process/RBI/DM_CAL.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloud/process/RBI/Postgresql.py" beforeDir="false" afterPath="$PROJECT_DIR$/cloud/process/RBI/Postgresql.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloud/process/RBI/fastCalulate.py" beforeDir="false" afterPath="$PROJECT_DIR$/cloud/process/RBI/fastCalulate.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloud/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/cloud/views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/addInspectionPlan.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/addInspectionPlan.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/createInspectionPlan.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/createInspectionPlan.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/inspectionPlanNew.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/FacilityUI/inspection_plan/inspectionPlanNew.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/FacilityUI/proposal/proposalNormalEdit.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/FacilityUI/proposal/proposalNormalEdit.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/FacilityUI/proposal/proposalNormalNew.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/FacilityUI/proposal/proposalNormalNew.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/css/bootstrap.min.css" beforeDir="false" afterPath="$PROJECT_DIR$/static/css/bootstrap.min.css" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -71,7 +58,7 @@
         <entry file="file://$PROJECT_DIR$/cloud/process/RBI/DM_CAL.py">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="-1710">
-              <caret line="754" column="13" lean-forward="true" selection-start-line="754" selection-start-column="13" selection-end-line="754" selection-end-column="13" />
+              <caret line="754" column="13" selection-start-line="754" selection-start-column="13" selection-end-line="754" selection-end-column="13" />
               <folding>
                 <element signature="e#0#11#0" expanded="true" />
               </folding>
@@ -80,19 +67,31 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/cloud/views.py">
+        <entry file="file://$PROJECT_DIR$/RbiCloud/settings.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-13548">
-              <caret line="4572" column="29" selection-start-line="4572" selection-start-column="16" selection-end-line="4572" selection-end-column="29" />
+            <state relative-caret-position="160">
+              <caret line="150" column="21" selection-start-line="150" selection-start-column="21" selection-end-line="150" selection-end-column="21" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/cloud/regularverification/regular.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="85">
+              <caret line="5" column="34" selection-start-line="5" selection-start-column="34" selection-end-line="5" selection-end-column="34" />
+              <folding>
+                <element signature="e#0#13#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/RbiCloud/settings.py">
+        <entry file="file://$PROJECT_DIR$/static/css/bootstrap.min.css">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="177">
-              <caret line="151" column="44" lean-forward="true" selection-start-line="151" selection-start-column="44" selection-end-line="151" selection-end-column="44" />
+            <state relative-caret-position="92">
+              <caret line="4" column="2875" lean-forward="true" selection-start-line="4" selection-start-column="2875" selection-end-line="4" selection-end-column="2875" />
             </state>
           </provider>
         </entry>
@@ -100,8 +99,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/Downloads/settings.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="255">
-              <caret line="91" column="6" lean-forward="true" selection-start-line="91" selection-start-column="6" selection-end-line="91" selection-end-column="6" />
+            <state relative-caret-position="-884">
+              <caret line="91" column="6" selection-start-line="91" selection-start-column="6" selection-end-line="91" selection-end-column="6" />
             </state>
           </provider>
         </entry>
@@ -119,16 +118,7 @@
         <entry file="file://$PROJECT_DIR$/requirements.txt">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="171">
-              <caret line="103" column="14" lean-forward="true" selection-start-line="103" selection-start-column="14" selection-end-line="103" selection-end-column="14" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/templates/FacilityUI/design_code/designcodeListDisplay.html">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="153">
-              <caret line="9" column="69" selection-start-line="9" selection-start-column="69" selection-end-line="9" selection-end-column="69" />
+              <caret line="103" column="14" selection-start-line="103" selection-start-column="14" selection-end-line="103" selection-end-column="14" />
             </state>
           </provider>
         </entry>
@@ -146,7 +136,7 @@
         <entry file="file://$PROJECT_DIR$/templates/FacilityUI/proposal/proposalTankNew.html">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="603">
-              <caret line="1037" column="33" lean-forward="true" selection-start-line="1037" selection-start-column="33" selection-end-line="1037" selection-end-column="33" />
+              <caret line="1037" column="33" selection-start-line="1037" selection-start-column="33" selection-end-line="1037" selection-end-column="33" />
             </state>
           </provider>
         </entry>
@@ -200,7 +190,6 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/templates/FacilityUI/component/componentNew.html" />
         <option value="$PROJECT_DIR$/../RBInoENV/venv/Lib/site-packages/pymysql/__init__.py" />
         <option value="$PROJECT_DIR$/cloud/__init__.py" />
         <option value="$PROJECT_DIR$/templates/FacilityUI/equipment/equipmentEdit.html" />
@@ -211,7 +200,6 @@
         <option value="$PROJECT_DIR$/cloud/process/RBI/CO_CAL.py" />
         <option value="$PROJECT_DIR$/templates/FacilityUI/proposal/proposalListDisplay.html" />
         <option value="$PROJECT_DIR$/templates/BaseUI/BaseFacility/baseProposal.html" />
-        <option value="$PROJECT_DIR$/cloud/regularverification/regular.py" />
         <option value="$PROJECT_DIR$/templates/FacilityUI/proposal/test.html" />
         <option value="$PROJECT_DIR$/templates/BaseUI/BaseFacility/baseFacility.html" />
         <option value="$PROJECT_DIR$/templates/FacilityUI/risk_summary/proposalCorrisionRate.html" />
@@ -251,6 +239,8 @@
         <option value="$PROJECT_DIR$/RbiCloud/urls.py" />
         <option value="$PROJECT_DIR$/requirements.txt" />
         <option value="$PROJECT_DIR$/RbiCloud/settings.py" />
+        <option value="$PROJECT_DIR$/cloud/regularverification/regular.py" />
+        <option value="$PROJECT_DIR$/static/css/bootstrap.min.css" />
       </list>
     </option>
   </component>
@@ -332,6 +322,12 @@
               <item name="Update_RBI_Web" type="b2602c69:ProjectViewProjectNode" />
               <item name="Update_RBI_Web" type="462c0819:PsiDirectoryNode" />
               <item name="static" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="Update_RBI_Web" type="b2602c69:ProjectViewProjectNode" />
+              <item name="Update_RBI_Web" type="462c0819:PsiDirectoryNode" />
+              <item name="static" type="462c0819:PsiDirectoryNode" />
+              <item name="css" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="Update_RBI_Web" type="b2602c69:ProjectViewProjectNode" />
@@ -654,8 +650,6 @@
     <option name="version" value="1" />
   </component>
   <component name="editorHistoryManager">
-    <entry file="das://table:/1c37ae7f/b573ea17-3290-4b1e-8a38-dbcc94541685/rbi3_3.auth_user" />
-    <entry file="das://table:/1c37ae7f/b573ea17-3290-4b1e-8a38-dbcc94541685/rbi3_3.users" />
     <entry file="file://D:/python/Lib/site-packages/django/core/mail/message.py" />
     <entry file="file://D:/python/Lib/site-packages/django/core/mail/backends/smtp.py" />
     <entry file="file://D:/python/Lib/smtplib.py" />
@@ -1023,7 +1017,7 @@
     <entry file="file://$PROJECT_DIR$/templates/FacilityUI/proposal/proposalTankNew.html">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="603">
-          <caret line="1037" column="33" lean-forward="true" selection-start-line="1037" selection-start-column="33" selection-end-line="1037" selection-end-column="33" />
+          <caret line="1037" column="33" selection-start-line="1037" selection-start-column="33" selection-end-line="1037" selection-end-column="33" />
         </state>
       </provider>
     </entry>
@@ -1037,7 +1031,7 @@
     <entry file="file://$PROJECT_DIR$/cloud/process/RBI/DM_CAL.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-1710">
-          <caret line="754" column="13" lean-forward="true" selection-start-line="754" selection-start-column="13" selection-end-line="754" selection-end-column="13" />
+          <caret line="754" column="13" selection-start-line="754" selection-start-column="13" selection-end-line="754" selection-end-column="13" />
           <folding>
             <element signature="e#0#11#0" expanded="true" />
           </folding>
@@ -1059,21 +1053,38 @@
     <entry file="file://$PROJECT_DIR$/requirements.txt">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="171">
-          <caret line="103" column="14" lean-forward="true" selection-start-line="103" selection-start-column="14" selection-end-line="103" selection-end-column="14" />
+          <caret line="103" column="14" selection-start-line="103" selection-start-column="14" selection-end-line="103" selection-end-column="14" />
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/Downloads/settings.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="255">
-          <caret line="91" column="6" lean-forward="true" selection-start-line="91" selection-start-column="6" selection-end-line="91" selection-end-column="6" />
+        <state relative-caret-position="-884">
+          <caret line="91" column="6" selection-start-line="91" selection-start-column="6" selection-end-line="91" selection-end-column="6" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/RbiCloud/settings.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="177">
-          <caret line="151" column="44" lean-forward="true" selection-start-line="151" selection-start-column="44" selection-end-line="151" selection-end-column="44" />
+        <state relative-caret-position="160">
+          <caret line="150" column="21" selection-start-line="150" selection-start-column="21" selection-end-line="150" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cloud/regularverification/regular.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="85">
+          <caret line="5" column="34" selection-start-line="5" selection-start-column="34" selection-end-line="5" selection-end-column="34" />
+          <folding>
+            <element signature="e#0#13#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/static/css/bootstrap.min.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="92">
+          <caret line="4" column="2875" lean-forward="true" selection-start-line="4" selection-start-column="2875" selection-end-line="4" selection-end-column="2875" />
         </state>
       </provider>
     </entry>
