@@ -324,7 +324,7 @@ class DM_CAL:
     #step 1
 
     def getTmin(self):
-        if self.APIComponentType == "TANKBOTTOM" or self.APIComponentType =="TANKROOFFLOAT":
+        if self.APIComponentType == "TANKBOTTOM0" or self.APIComponentType =="TANKROOFFLOAT0":
             if (self.ProtectedBarrier):
                 #t = 2.54
                 t=0.05
@@ -346,7 +346,9 @@ class DM_CAL:
             return 0
     def Art(self,age):
         try:
-            if self.APIComponentType == "TANKBOTTOM" or self.APIComponentType == "TANKROOFFLOAT":
+            if self.APIComponentType == "TANKBOTTOM0" or self.APIComponentType == "TANKROOFFLOAT0":
+                # print("Art")
+                # print(max((1-(self.trdi() - self.CorrosionRate * self.agetk(age)) / (self.getTmin() + self.CA)), 0.0))
                 return max((1-(self.trdi() - self.CorrosionRate * self.agetk(age)) / (self.getTmin() + self.CA)), 0.0)
             elif (self.InternalCladding):
                 if (self.agetk(age) < self.agerc()):
@@ -432,7 +434,7 @@ class DM_CAL:
         return (1- 4*self.Art(age)-self.SRp_Thin())/math.sqrt(pow(self.Art(age),2)*16*0.04 + pow(1-4*self.Art(age),2)*0.04+pow(self.SRp_Thin(),2)*pow(0.05,2))
 
     def API_ART(self, a):
-        if self.APIComponentType == 'TANKBOTTOM' or self.APIComponentType == 'TANKROOFFLOAT':
+        if self.APIComponentType == 'TANKBOTTOM0' or self.APIComponentType == 'TANKROOFFLOAT0':
             data = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
                     0.95, 1]
             if a < (data[0] + data[1]) / 2:
@@ -499,7 +501,7 @@ class DM_CAL:
     def DFB_THIN(self, age):
         self.EFF_THIN = DAL_CAL.POSTGRESQL.GET_MAX_INSP(self.ComponentNumber, self.DM_Name[0])
         self.NoINSP_THINNING = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber,self.DM_Name[0])
-        if (self.APIComponentType == 'TANKBOTTOM' or self.APIComponentType == 'TANKROOFFLOAT'):
+        if (self.APIComponentType == 'TANKBOTTOM0' or self.APIComponentType == 'TANKROOFFLOAT0'):
             if (self.NomalThick == 0 or self.CurrentThick == 0):
                 return 1390
             else:
@@ -507,10 +509,13 @@ class DM_CAL:
                 #return DAL_CAL.POSTGRESQL.GET_TBL_512(self.API_ART(self.Art(age)), self.EFF_THIN)
         else:
             try:
-                a = self.Po_P1_Thin() * self.ncdf(- self.B1_Thin(age))
-                b = self.Po_P2_Thin() * self.ncdf(- self.B2_Thin(age))
-                c = self.Po_P3_Thin() * self.ncdf(- self.B3_Thin(age))
-                return (a + b + c) / (1.56 * pow(10, -4))
+                if (self.NomalThick == 0 or self.CurrentThick == 0 or self.WeldJointEffciency == 0 or (self.YieldStrengthDesignTemp == 0 and self.TensileStrengthDesignTemp == 0)):
+                    return 6500;
+                else:
+                    a = self.Po_P1_Thin() * self.ncdf(- self.B1_Thin(age))
+                    b = self.Po_P2_Thin() * self.ncdf(- self.B2_Thin(age))
+                    c = self.Po_P3_Thin() * self.ncdf(- self.B3_Thin(age))
+                    return (a + b + c) / (1.56 * pow(10, -4))
             except Exception as e:
                 print(e)
                 return 0
@@ -527,13 +532,11 @@ class DM_CAL:
             Fdl = 3
         else:
             Fdl = 1
-
         if self.EquipmentType == "Tank":
             if (self.ComponentIsWeld):
                 Fwd = 1
             else:
                 Fwd = 10
-
             if (self.TankMaintain653):
                 Fam = 1
             else:
@@ -546,8 +549,7 @@ class DM_CAL:
             elif (self.AdjustmentSettle == "Settlement never evaluated"):
                 Fsm = 1.5
             else:
-                Fsm = 1
-
+                Fsm = 0
         if (
                                                                 self.OnlineMonitoring == "Amine high velocity corrosion - Electrical resistance probes" or self.OnlineMonitoring == "Amine high velocity corrosion - Key process variable" or self.OnlineMonitoring == "Amine low velocity corrosion - Electrical resistance probes" or self.OnlineMonitoring == "HCL corrosion - Electrical resistance probes" or
                                                     self.OnlineMonitoring == "HCL corrosion - Key process variable" or self.OnlineMonitoring == "HF corrosion - Key process variable" or self.OnlineMonitoring == "High temperature H2S/H2 corrosion - Electrical resistance probes" or self.OnlineMonitoring == "High temperature Sulfidic / Naphthenic acid corrosion - Electrical resistance probes" or
@@ -569,13 +571,13 @@ class DM_CAL:
     #Calculate Linning:
     def DFB_LINNING(self, age):
         if (self.INTERNAL_LINNING):
-            if (self.LinningType == "Organic Low Quality"):
+            if (self.LinningType == "Organic - Low Quality"):
                 SUSCEP_LINNING ="MoreThan6Years"
                 return DAL_CAL.POSTGRESQL.GET_TBL_65(math.ceil(age), SUSCEP_LINNING)
-            elif(self.LinningType == "Organic Medium Quality"):
+            elif(self.LinningType == "Organic - Medium Quality"):
                 SUSCEP_LINNING ="WithinLast6Years"
                 return DAL_CAL.POSTGRESQL.GET_TBL_65(math.ceil(age), SUSCEP_LINNING)
-            elif(self.LinningType == "Organic High Quality"):
+            elif(self.LinningType == "Organic - High Quality"):
                 SUSCEP_LINNING ="WithinLast3Years"
                 return DAL_CAL.POSTGRESQL.GET_TBL_65(math.ceil(age), SUSCEP_LINNING)
             else:
@@ -1323,6 +1325,7 @@ class DM_CAL:
             CR_EXTERN = (self.CUI_PERCENT_3*0.254+self.CUI_PERCENT_4*0.254+self.CUI_PERCENT_5*0.254+self.CUI_PERCENT_6*0.051)/100
         else:
             CR_EXTERN = (self.CUI_PERCENT_3*0.076+self.CUI_PERCENT_4*0.076+self.CUI_PERCENT_5*0.051)/100
+
         return CR_EXTERN
 
     def API_ART_EXTERNAL(self, age):
@@ -1335,6 +1338,7 @@ class DM_CAL:
         else:
             FIP = 1
         CR = self.API_EXTERNAL_CORROSION_RATE() * max(FPS, FIP)
+
         try:
             ART_EXT = (CR*self.AGE_CUI(age))/self.trdi()
         except Exception as e:
@@ -1343,23 +1347,27 @@ class DM_CAL:
         return ART_EXT
 
     def DF_EXTERNAL_CORROSION(self, age):
-        # if (self.EXTERNAL_EXPOSED_FLUID_MIST or (
-        #     self.CARBON_ALLOY and not (self.MAX_OP_TEMP < -23 or self.MIN_OP_TEMP > 121))):
-        self.EXTERNAL_INSP_EFF = DAL_CAL.POSTGRESQL.GET_MAX_INSP(self.ComponentNumber, self.DM_Name[11])
-        self.EXTERNAL_INSP_NUM = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber, self.DM_Name[11])
-        #self.NoINSP_EXTERNAL = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber, self.DM_Name[11])
+        if (self.EXTERNAL_EXPOSED_FLUID_MIST or (
+        self.CARBON_ALLOY and not (self.MAX_OP_TEMP < -23 or self.MIN_OP_TEMP > 121))):
+            self.EXTERNAL_INSP_EFF = DAL_CAL.POSTGRESQL.GET_MAX_INSP(self.ComponentNumber, self.DM_Name[11])
+            self.EXTERNAL_INSP_NUM = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber, self.DM_Name[11])
+            self.NoINSP_EXTERNAL = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber, self.DM_Name[11])
         if (self.EXTERNAL_INSP_EFF == "" or self.EXTERNAL_INSP_NUM == 0):
             self.EXTERNAL_INSP_EFF = "E"
-        if (self.APIComponentType == "TANKBOTTOM" or self.APIComponentType == "TANKROOFFLOAT"):
-            if (self.NomalThick == 0 or self.CurrentThick == 0 or self.WeldJointEffciency or self.TensileStrengthDesignTemp):
+        if (self.APIComponentType == "TANKBOTTOM0" or self.APIComponentType == "TANKROOFFLOAT0"):
+            if (self.NomalThick == 0 or self.CurrentThick == 0 or self.WeldJointEffciency == 0 or(
+             self.YieldStrengthDesignTemp == 0 and self.TensileStrengthDesignTemp == 0) or self.EXTERN_COAT_QUALITY == "" or (bool(self.COMPONENT_INSTALL_DATE) == False)):
                 return 6500;
                 # return 1390
             else:
                 return DAL_CAL.POSTGRESQL.GET_TBL_512(self.API_ART(self.API_ART_EXTERNAL(age)), self.EXTERNAL_INSP_NUM,
                                                      self.EXTERNAL_INSP_EFF)
         else:
-            if (self.NomalThick == 0 or self.CurrentThick == 0 or self.WeldJointEffciency or self.TensileStrengthDesignTemp):
+            if (self.NomalThick == 0 or self.CurrentThick == 0 or self.WeldJointEffciency== 0 or
+            (self.YieldStrengthDesignTemp == 0 and self.TensileStrengthDesignTemp == 0) or self.EXTERN_COAT_QUALITY == "" or (bool(self.COMPONENT_INSTALL_DATE) == False)):
                 return 6500;
+            elif(self.APIComponentType =="TANKBOTTOM" and self.ShapeFactor==0.0 and self.MINIUM_STRUCTURAL_THICKNESS_GOVERS==False):#bổ sung trường hợp
+                return 6500
             else:
                 try:
                     a = self.Po_P1_EXTERNAL() * self.ncdf(- self.B1_EXTERNAL(age))
@@ -1569,7 +1577,7 @@ class DM_CAL:
             self.CUI_INSP_NUM = DAL_CAL.POSTGRESQL.GET_NUMBER_INSP(self.ComponentNumber, self.DM_Name[12])
             if (self.CUI_INSP_EFF == "" or self.CUI_INSP_NUM == 0):
                 self.CUI_INSP_EFF = "E"
-            if (self.APIComponentType == "TANKBOTTOM" or self.APIComponentType == "TANKROOFFLOAT"):
+            if (self.APIComponentType == "TANKBOTTOM0" or self.APIComponentType == "TANKROOFFLOAT0"):
                 if (self.NomalThick == 0 or self.CurrentThick == 0):
                     return 1390
                 else:
@@ -1901,17 +1909,20 @@ class DM_CAL:
                                                  self.API_SIZE_BRITTLE(self.BRITTLE_THICK))
 
     def DF_BRITTLE(self,i):
-        Fse = 1
-        if(self.BRITTLE_THICK<=12.7 or (self.FABRICATED_STEEL and self.EQUIPMENT_SATISFIED and self.NOMINAL_OPERATING_CONDITIONS
-        and self.CET_THE_MAWP and self.CYCLIC_SERVICE and self.EQUIPMENT_CIRCUIT_SHOCK and (self.NomalThick <=50.8))):
-            Fse = 0.01
-        if (self.CARBON_ALLOY and (self.CRITICAL_TEMP < self.MIN_DESIGN_TEMP or self.MAX_OP_TEMP < self.MIN_DESIGN_TEMP)):
-            # if (self.LOWEST_TEMP):
-            return self.DFB_BRIITLE() * Fse
-            # else:
-            #     return self.DFB_BRIITLE()
-        else:
-            return 0
+        try:
+            Fse = 1
+            if(self.BRITTLE_THICK<=12.7 or (self.FABRICATED_STEEL and self.EQUIPMENT_SATISFIED and self.NOMINAL_OPERATING_CONDITIONS
+            and self.CET_THE_MAWP and self.CYCLIC_SERVICE and self.EQUIPMENT_CIRCUIT_SHOCK and (self.NomalThick <=50.8))):
+                Fse = 0.01
+            if (self.CARBON_ALLOY and (self.CRITICAL_TEMP < self.MIN_DESIGN_TEMP or self.MAX_OP_TEMP < self.MIN_DESIGN_TEMP)):
+                # if (self.LOWEST_TEMP):
+                return self.DFB_BRIITLE() * Fse
+                # else:
+                #     return self.DFB_BRIITLE()
+            else:
+                return 0
+        except Exception as e:
+            print(e)
 
     # Calculate TEMP EMBRITTLE
     def API_SIZE_BRITTLE(self, SIZE):
@@ -2273,7 +2284,7 @@ class DM_CAL:
         return self.DF_HTHA(self.GET_AGE()[15] + i)
 
     def DF_BRITTLE_API(self, i):
-        return  self.DF_BRITTLE(self.GET_AGE()[16] + i)
+        return self.DF_BRITTLE(self.GET_AGE()[16] + i)
 
     def DF_TEMP_EMBRITTLE_API(self,i):
         return self.DF_TEMP_EMBRITTLE(self.GET_AGE()[17] + i)
@@ -2288,7 +2299,7 @@ class DM_CAL:
         return self.DF_PIPE(self.GET_AGE()[20] + i)
 
     # TOTAL ---------------------
-    def DF_SSC_TOTAL_API(self, i):#done - con anie
+    def DF_SSC_TOTAL_API(self, i):#done - con anie)
         DF_SCC = max(self.DF_CAUTISC_API(i), self.DF_AMINE_API(i), self.DF_SULPHIDE_API(i), self.DF_HIC_SOHIC_HF_API(i), self.DF_HICSOHIC_H2S_API(i),
                      self.DF_CACBONATE_API(i), self.DF_PTA_API(i), self.DF_CLSCC_API(i), self.DF_HSCHF(i))
         return DF_SCC
@@ -2296,6 +2307,7 @@ class DM_CAL:
     def DF_EXT_TOTAL_API(self, i):#done
         DF_EXT = max(self.DF_EXTERNAL_CORROSION_API(i), self.DF_CUI_API(i),self.DF_EXTERN_CLSCC_API(i), self.DF_CUI_CLSCC_API(i))
         return DF_EXT
+        #return 0.07
 
     def DF_BRIT_TOTAL_API(self,i):#done
         DF_BRIT = max(self.DF_BRITTLE_API(i) + self.DF_TEMP_EMBRITTLE_API(i), self.DF_SIGMA_API(i), self.DF_885_API(i))
@@ -2311,11 +2323,82 @@ class DM_CAL:
         except Exception as e:
             print(e)
 
+    def DF_RISK_CHART_THINNING(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_THINNING_TOTAL_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
+    def DF_RISK_CHART_EXT(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_EXT_TOTAL_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
+    def DF_RISK_CHART_SSC(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_SSC_TOTAL_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
+    def DF_RISK_CHART_HTHA(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_HTHA_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
+    def DF_RISK_CHART_BRIT(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_BRIT_TOTAL_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
+    def DF_RISK_CHART_PIPE(self):
+        try:
+            data = []
+            # for a in range(1, 16):
+            for a in range(1, 16):
+                risk = self.DF_PIPE_API(a)
+                data.append(risk)
+            return data
+        except Exception as e:
+            print(e)
+        return data
+
     def DF_TOTAL_API(self,i):#testing df_htha
         try:
             TOTAL_DF_API = max(self.DF_THINNING_TOTAL_API(i), self.DF_EXT_TOTAL_API(i)) + self.DF_SSC_TOTAL_API(
                 i) + self.DF_HTHA_API(i) + self.DF_BRIT_TOTAL_API(i) + self.DF_PIPE_API(i)
-            TOTAL_DF_API = max(self.DF_THINNING_TOTAL_API(i),self.DF_EXT_TOTAL_API(i)) + self.DF_SSC_TOTAL_API(i) + self.DF_HTHA_API(i) + self.DF_BRIT_TOTAL_API(i) + self.DF_PIPE_API(i)
         except Exception as e:
             print(e)
         return TOTAL_DF_API
@@ -2353,14 +2436,20 @@ class DM_CAL:
         for a in range(1,16):
             if self.DF_TOTAL_API(a) >= DF_TARGET:
                 break
-        return self.AssesmentDate + relativedelta(years=a)
+        if(a==15):
+            return self.AssesmentDate + relativedelta(years=a+1)
+        else:
+            return self.AssesmentDate + relativedelta(years=a-1)
 
     def INSP_DUE_DATE_General(self, FC_total, GFF, FSM, Risk_Target):
         DF_TARGET = Risk_Target/(FC_total*GFF*FSM)
         for a in range(1,16):
             if self.DF_TOTAL_GENERAL(a) >= DF_TARGET:
                 break
-        return self.AssesmentDate + relativedelta(year=a)
+        if(a==15):
+            return self.AssesmentDate + relativedelta(year=a+1)
+        else:
+            return self.AssesmentDate + relativedelta(year=a)
 
     def SEND_EMAIL(self, FC_Total, GFF, FSM, Risk_Target,ErrDammage,facilityname):
         DF_TARGET = Risk_Target/(FC_Total * GFF * FSM)
@@ -2372,7 +2461,8 @@ class DM_CAL:
                 DFm =models.DMItems.objects.get(dmitemid=da)
                 message += "  + "+str(DFm.dmdescription) + ".\n"
             message += "\n Email from Facility"
-            to_email = "doanhtuan14111997@gmail.com"
+            #to_email = "doanhtuan14111997@gmail.com"
+            to_email = "luongvancuongkmhd1998@gmail.com"
             Email = EmailMessage(email_subject, message, to=[to_email])
             Email.send()
 

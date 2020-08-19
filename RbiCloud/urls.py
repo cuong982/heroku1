@@ -31,14 +31,18 @@ urlpatterns = [
     path('basebusiness/',views.base_business,name='basebusiness'),
     path('business/', views.business_home, name='business'),
     path('equipment/', views.base_equipment, name='equipment'),
-    path('component/', views.base_component, name='component'),
+    path('component/', views.base_component, name='componentmanagement/'),
     path('proposal/', views.base_proposal, name='prosal'),
     path('risksummary/', views.base_risksummary, name='risk'),
     path('designcode/', views.base_designcode, name='designcode'),
     path('manufacture/', views.base_manufacture, name= 'manufacture'),
+    path('basereport/', views.base_report,name='basereport'), #Dat sua
     ########################## Facility UI################################
-    path('inspection/plan/<int:siteID>/', views.InpsectionPlan, name='inspectionPlan'),
-    path('inspection/plan/<int:siteID>/InpsectionPlan<str:name>/InpsectionPlan<str:date>/', views.InpsectionPlan,name='inspectionPlan'),
+    path('damage/thining/<int:proposalID>/', views.ShowThining, name='thining'),
+    path('damage/governing/<int:proposalID>/', views.ShowGoverning, name='governing'),
+    path('inspection/plan/<int:siteID>/', views.MainInpsectionPlan, name='inspectionPlan'),
+    path('inspection/plan/<int:siteID>/<int:planID>/damageMechanism', views.DamamgeMechanism, name='damageMechanism'),
+    path('inspection/plan/<int:siteID>/InpsectionPlan<str:name>/InpsectionPlan<str:date>/', views.MainInpsectionPlan,name='inspectionPlan'),
     path('add/<int:siteID>/<int:facilityID>/<int:equipID>/<str:name>/<str:date>/plan/', views.AdddInssepctionPlan,name='addInspectionPlan'),
     path('create/<int:siteID>/plan/', views.CreateInspectionPlan, name='createInspectionPlan'),
     path('facilities/display/<int:siteID>/', views.ListFacilities, name='facilitiesDisplay'),
@@ -65,9 +69,12 @@ urlpatterns = [
     path('proposal/<int:proposalID>/damage-factor/', views.FullyDamageFactor, name='damgeFactor'),
     path('proposal/<int:proposalID>/chart/', views.RiskChart, name='riskChart'),
     path('proposal/<int:proposalID>/fully-consequence/',views.FullyConsequence, name='fullyConsequence'),
+    path('propasal/<int:proposalID>/areaBased-CoF/',views.AreaBasedCoF, name='areaBasedCoF'),
     path('export/<int:index>/<str:type>/', views.ExportExcel, name='exportData'),
     path('site/<int:siteID>/upload/InspectionHistory/', views.uploadInspPlan, name='upload'),
     path('site/<int:siteID>/upload/Plan/', views.upload, name='uploadPlan'),
+    path('ManagmentSystems/<int:facilityID>/', views.ManagementSystems, name='managmentsystems'),
+    # path('site/<int:siteID>/upload/DCS-SCADA/', views.uploadSCADA, name='uploadScada'),
     ########################## forum ################################
     path('forum/',views.base_forum,name='forum'),
     path('forum/post/<int:postID>',views.posts_forum,name='posts'),
@@ -93,6 +100,10 @@ urlpatterns = [
     path('activate/<slug:uidb64>/<slug:token>/', views.activate, name='activate'),
     ########################## Manager UI################################
     path('management/<int:siteID>/', views.ManagerHome, name= 'manager'),
+    # Cuong bo sung 12/8/2020 => thiet ke giao dien hang mmuc co quan quan li
+    path('management/<int:siteID>/Home/', views.ManagerHomeDetail, name= 'managerhomedetail'),
+    path('management/<int:siteID>/CalculateFunction/', views.CalculateFunctionManager, name= 'calculatefunctionmanager'),
+    path('management/<int:siteID>/ToolManager/', views.ToolManager, name= 'toolmanager'),
     path('manufactureMana/display/<int:siteID>/', views.ListManufactureMana, name='manufactureDisplayMana'),
     path('designcodeMana/display/<int:siteID>/', views.ListDesignCodeMana, name='designcodeDisplayMana'),
     path('facilitiesMana/display/<int:siteID>/', views.ListFacilitiesMana, name='facilitiesDisplayMana'),
@@ -122,7 +133,14 @@ urlpatterns = [
     path('proposalCitizen/<int:proposalID>/chart/', views.RiskChartCitizen, name='riskChartCitizen'),
     path('proposalCitizen/<int:proposalID>/fully-consequence/',views.FullyConsequenceCitizen, name='fullyConsequenceCitizen'),
     #############connect thingsboard _____ sensor, gateway #############
-    path('newsensor/<int:componentID>/', views.NewSensor, name='newsensor')
+    path('newsensor/<int:componentID>/', views.NewSensor, name='newsensor'),
+    path('sensor/<int:componentID>/chart/', views.DataChart, name='sensorchart'),
+    # Datdz
+    path('report/', views.ReportMana, name='reportmana'),
+    path('reportfac/<int:siteID>/', views.ReportFacilities, name='reportfacilities'),
+    path('reportequip/<int:facilityID>/', views.ReportEquipment, name='reportequipment'),
+    path('reportcomp/<int:equipmentID>/', views.ReportComponent, name='reportcomponent'),
+    path('reportproposal/<int:componentID>/', views.ReportProposal, name='reportproposal')
 ]
 '''
 Dkm cuong luong

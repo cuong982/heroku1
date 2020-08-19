@@ -201,7 +201,7 @@
                         </div>
                         <div class="row">
                             <div class="col-md-6">External Environment</div>
-                            <div class="col-md-6"><select class="form-control" name="ExternalEnvironment">
+                            <div class="col-md-6"><select class="form-control" name="ExternalEnvironment" id="ExternalEnvironment">
                                 <option value="" selected disabled>Please select extern environ..</option>
                                 <option>Arid/dry</option>
                                 <option>Marine</option>
@@ -296,6 +296,7 @@
                                 <option>Sandy Clay</option>
                                 <option>Clay</option>
                                 <option>Concrete-Asphalt</option>
+                                <option>Gravel</option>
                             </select></div>
                             <script>
                                 {% if rwEq.typeofsoil %}
@@ -313,17 +314,18 @@
                             </select></div>
                             <script>
                                 {% if rwEq.environmentsensitivity %}
-                                $("#EnvironmentSensitivity").val("{{ rwEq.environmentsensitivity }}")
+                                $("#EnvironmentSensitivity").val("{{ rwEq.environmentsensitivity }}");
                                 {% endif %}
                             </script>
                         </div>
                         <div class="row">
-                            {% if isshell %}
-                             <!----- do nothing ------>
-                            {% else %}
+{#                            tuan#}
+{#                            {% if isshell %}#}
+{#                             <!----- do nothing ------>#}
+{#                            {% else %}#}
                             <div class="col-md-6">Distance To Ground Water, m:<span style="color: red">*</span></div>
                             <div class="col-md-6"><input type="number" step="0.01" max="100000" class="form-control" min="0" name="Distance" value="{{ rwEq.distancetogroundwater }}" placeholder="Distance to ground water" required/></div>
-                            {% endif %}
+{#                            {% endif %}#}
                         </div>
                     </fieldset>
                 </fieldset>
@@ -366,10 +368,10 @@
                             <div class="col-md-3"><input type="number" class="form-control" step="0.01" min="0" max="1000" placeholder="StructuralThickness" value="{{ rwComp.structuralthickness }}" name="StructuralThickness" required/></div>
                             <div class="col-md-3">Current Corrosion Rate, mm/yr:<span style="color: red">*</span></div>
                             <div class="col-md-3"><input type="number" step="0.01" min="0" max="1000" class="form-control" value="{{ rwComp.currentcorrosionrate }}" name="CurrentCorrosionRate" placeholder="Corrosion rate" required/></div>
-                            {% if isshell %}
-                            <div class="col-md-3">Shell Course Height, m:<span style="color: red">*</span></div>
-                            <div class="col-md-3"><input type="number" step="0.01" class="form-control" max="1000" value="{{ rwComp.shellheight }}" min="0" name="shellHeight" placeholder="Shell course height" required/></div>
-                            {% endif %}
+{#                            {% if isshell %}#}
+{#                            <div class="col-md-3">Shell Course Height, m:<span style="color: red">*</span></div>#}
+{#                            <div class="col-md-3"><input type="number" step="0.01" class="form-control" max="1000" value="{{ rwComp.shellheight }}" min="0" name="shellHeight" placeholder="Shell course height" required/></div>#}
+{#                            {% endif %}#}
                         </div>
                         <div class="row">
                             <div class="col-md-5">Damage Found During Inspection</div>
@@ -389,7 +391,7 @@
 {#                            <div class="col-md-5">Tramp Elements</div>#}
 {#                            <div class="col-md-1"><input type="checkbox" name="TrampElements" id="TrampElements"/></div>#}
                             <div class="col-md-3">Weld Joint Efficiency</div>
-                            <div class="col-md-3"><input id="maxN" onkeyup="MaximumN()" type="number" maxlength="10" class="form-control" step="0.01" min="0" value="0" max="1" placeholder="WeldJointEff" name="WeldJointEff" id="WeldJointEff" required/></div>
+                            <div class="col-md-3"><input id="maxN" onkeyup="MaximumN()" type="number" maxlength="10" class="form-control" step="0.01" min="0" value="{{ rwComp.weldjointefficiency }}" max="1" placeholder="WeldJointEff" name="WeldJointEff" id="WeldJointEff" required/></div>
                             <script>
                                 function MaximumN(){
                                     var max = document.getElementById("maxN").value;
@@ -519,9 +521,9 @@
                     </fieldset>
                     <fieldset class="scheduler-border">
                         <legend class="scheduler-border"><b>Tank Consequence of Failure Properties</b></legend>
-                        {% if isshell %}
-                        <!----------do no thing------------>
-                        {% else %}
+{#                        {% if isshell %}#}
+{#                        <!----------do no thing------------>#}
+{#                        {% else %}#}
                         <div class="row">
                             <div class="col-md-5">Release Prevention Barrier</div>
                             <div class="col-md-1"><input type="checkbox" name="ReleasePreventionBarrier" id="ReleasePreventionBarrier"/></div>
@@ -538,7 +540,7 @@
                             <div class="col-md-7">Height of Each Shell Course<span style="color: red">*</span></div>
                             <div class="col-md-3"><input type="number" step="0.01" min="0" value="{{ rwComp.shellheight }}" max="100000" class="form-control" name="HeightEShellC" placeholder="Height of Each Shell Course" required/></div>
                         </div>
-                        {% endif %}
+{#                        {% endif %}#}
                     </fieldset>
                 </fieldset>
             </div>
@@ -563,6 +565,10 @@
                         <div class="col-md-3"><input type="number" class="form-control" max="1000000000" step="0.01" min="0" value="{{ rwStream.h2spartialpressure }}" name="OHPP" placeholder="Operator hydrogen pressure" required/></div>
                         <div class="col-md-3" style="color: red">Critical Exposure Temperature, &deg;C:<span style="color: red">*</span></div>
                         <div class="col-md-3"><input type="number" class="form-control" max="100000" step="0.01" value="{{ rwStream.criticalexposuretemperature }}" name="CET" placeholder="Critical temp" required/></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">Flow rate, m<sup>3</sup>/hr:</div>
+                        <div class="col-md-3"><input type="number" class="form-control" step="0.01" max="100000" value="{{ rwStream.flowrate }}" name="FlowRate" placeholder="Flow rate" required/></div>
                     </div>
                     <fieldset class="scheduler-border">
                         <legend class="scheduler-border"><b>Operating Temperature in Different Temperature Ranger</b></legend>
@@ -696,7 +702,7 @@
                             <div class="col-md-6"><select class="form-control" name="SulfurContent" id="SulfurContent">
                                 <option value="" selected disabled>Please select sulfur content..</option>
                                 <option>High > 0.01%</option>
-                                <option>Low 0.002 - 0.01%</option>
+                                <option>Low <= 0.01%</option>
                                 <option>Ultra Low < 0.002%</option>
                             </select></div>
                             <script>
@@ -910,6 +916,9 @@
                             <div class="col-md-6">Internal Liner Type</div>
                             <div class="col-md-6"><select class="form-control" id="InterLinningTankType" name="InternalLinerType">
                                 <option value="" disabled selected>Please select inter linning..</option>
+                                <option>Organic - Low Quality</option>
+                                <option>Organic - Medium  Quality</option>
+                                <option>Organic - High Quality</option>
                                 <option>Acid Brick</option>
                                 <option>Castable refractory</option>
                                 <option>Castable refractory severe condition</option>
@@ -1070,6 +1079,7 @@
                                 <option>Crude Oil</option>
                                 <option>Heavy Fuel Oil</option>
                                 <option>Heavy Crude Oil</option>
+                                <option>Water</option>
                             </select></div>
                             <script>
                                 {% if rwInputCa.tank_fluid %}

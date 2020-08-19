@@ -1,4 +1,5 @@
 import os
+from operator import eq
 
 import xlrd
 import math
@@ -22,7 +23,7 @@ def checkEquipmentComponentExist(equipmentNumber,componentNumber):
         return count
     except Exception as e:
         print(e)
-        print("bug")
+        print("error in checkEquipmentComponentExist")
         return False
 
 def convertInt(floatnumber):
@@ -41,6 +42,15 @@ def getDMItemID(damagename):
 
 def xldate_to_datetime(xldatetime):  # something like 43705.6158241088
     try:
+        # print(xldatetime)
+        # xldatetime1 = str(xldatetime)
+        # print(xldatetime1)
+        # time = datetime.datetime.strptime(xldatetime1, "%d/%m/%Y").strftime("%Y-%m-%d")
+        # my_time = datetime.datetime.min.time()
+        # print("ddd")
+        # my_datetime = datetime.datetime.combine(time, my_time)
+        # print(my_datetime)
+        # print(time)
         tempDate = datetime.datetime(1899, 12, 31)
         (days, portion) = math.modf(xldatetime)
 
@@ -53,7 +63,7 @@ def xldate_to_datetime(xldatetime):  # something like 43705.6158241088
         inspdatetime = datetime.datetime.strptime(timeinsp, "%Y-%m-%d %H:%M:%S")
         return inspdatetime
     except Exception as e:
-        print("error in xldate")
+        print("error in xldate_to_datetime")
         print(e)
 
 
@@ -76,7 +86,7 @@ def convertDateInsp(dateString):
         return datetime.utcfromtimestamp(seconds)
     except Exception as e:
         print(e)
-        print("error here")
+        print("error in convertDateInsp")
         return datetime.now().date()
 
 def convertTF(data):
@@ -377,7 +387,7 @@ def processEquipmentMaster(ws):
                                 eq = models.EquipmentMaster.objects.get(equipmentnumber=ws.cell(row, 0).value)
                                 eq.equipmenttypeid_id = getEquipmentTypeID(ws.cell(row, 1).value)
                                 eq.equipmentname = ws.cell(row, 2).value
-                                eq.commissiondate = convertDateInsp(ws.cell(row, 7).value)
+                                eq.commissiondate = xldate_to_datetime(ws.cell(row, 7).value)
                                 eq.designcodeid_id = getDesigncodeID(ws.cell(row, 3).value)
                                 eq.siteid_id = getSiteID(ws.cell(row, 4).value)
                                 eq.facilityid_id = getFacilityID(ws.cell(row, 5).value)
@@ -388,7 +398,7 @@ def processEquipmentMaster(ws):
                                 eq.save()
                             else:
                                 eq = models.EquipmentMaster(equipmentnumber= ws.cell(row,0).value, equipmenttypeid_id= getEquipmentTypeID(ws.cell(row, 1).value),
-                                                            equipmentname= ws.cell(row,2).value, commissiondate = convertDateInsp(ws.cell(row, 7).value),
+                                                            equipmentname= ws.cell(row,2).value, commissiondate = xldate_to_datetime(ws.cell(row, 7).value),
                                                             designcodeid_id=getDesigncodeID(ws.cell(row, 3).value), siteid_id = getSiteID(ws.cell(row, 4).value),
                                                             facilityid_id=getFacilityID(ws.cell(row, 5).value), manufacturerid_id = getManufactureID(ws.cell(row, 6).value),
                                                             pfdno=ws.cell(row, 8).value, processdescription = ws.cell(row, 9).value, equipmentdesc = ws.cell(row, 10).value)
@@ -425,7 +435,7 @@ def processEquipmentMaster(ws):
                                 eq = models.EquipmentMaster.objects.get(equipmentnumber=ws.cell(row, 0).value)
                                 eq.equipmenttypeid_id = getEquipmentTypeID(ws.cell(row, 1).value)
                                 eq.equipmentname = ws.cell(row, 2).value
-                                eq.commissiondate = convertDateInsp(ws.cell(row, 7).value)
+                                eq.commissiondate = xldate_to_datetime(ws.cell(row, 7).value)
                                 eq.designcodeid_id = getDesigncodeID(ws.cell(row, 3).value)
                                 eq.siteid_id = getSiteID(ws.cell(row, 4).value)
                                 eq.facilityid_id = getFacilityID(ws.cell(row, 5).value)
@@ -436,7 +446,7 @@ def processEquipmentMaster(ws):
                                 eq.save()
                             else:
                                 eq = models.EquipmentMaster(equipmentnumber= ws.cell(row,0).value, equipmenttypeid_id= getEquipmentTypeID(ws.cell(row, 1).value),
-                                                            equipmentname= ws.cell(row,2).value, commissiondate = convertDateInsp(ws.cell(row, 7).value),
+                                                            equipmentname= ws.cell(row,2).value, commissiondate = xldate_to_datetime(ws.cell(row, 7).value),
                                                             designcodeid_id=getDesigncodeID(ws.cell(row, 3).value), siteid_id = getSiteID(ws.cell(row, 4).value),
                                                             facilityid_id=getFacilityID(ws.cell(row, 5).value), manufacturerid_id = getManufactureID(ws.cell(row, 6).value),
                                                             pfdno=ws.cell(row, 8).value, processdescription = ws.cell(row, 9).value, equipmentdesc = ws.cell(row, 10).value)
@@ -485,12 +495,13 @@ def processAssessment(ws):
                     row, 4).value and ws.cell(row, 7).value:
                     if checkComponentAvaiable(ws.cell(row, 0).value, ws.cell(row, 1).value):
                         rwAss = models.RwAssessment(equipmentid_id= getEquipmentID(ws.cell(row,0).value), componentid_id= getComponentID(ws.cell(row,1).value),
-                                                    assessmentdate= convertDateInsp(ws.cell(row,7).value), riskanalysisperiod= 36,
-                                                    isequipmentlinked= convertTF(ws.cell(row,5).value), proposalname= "New Excel Proposal " + str(datetime.now().strftime('%m-%d-%y')))
+                                                    assessmentdate= xldate_to_datetime(ws.cell(row,7).value), riskanalysisperiod= 36,
+                                                    isequipmentlinked= convertTF(ws.cell(row,5).value), proposalname= "New Excel Proposal " + str(datetime.datetime.now().strftime('%m-%d-%y')))
                         rwAss.save()
 
                         #Luu lai cac bang trung gian
-                        rwEquip = models.RwEquipment(id= rwAss, commissiondate= datetime.now())
+                        rwEquip = models.RwEquipment(id= rwAss, commissiondate= datetime.datetime.now())
+                        # rwEquip = models.RwEquipment(id= rwAss) #Cương Sửa
                         rwEquip.save()
 
                         rwComp = models.RwComponent(id = rwAss)
@@ -505,7 +516,8 @@ def processAssessment(ws):
                         rwMater = models.RwMaterial(id= rwAss)
                         rwMater.save()
 
-                        rwCoat = models.RwCoating(id= rwAss, externalcoatingdate= datetime.now())
+                        rwCoat = models.RwCoating(id= rwAss, externalcoatingdate= datetime.datetime.now())
+                        # rwCoat = models.RwCoating(id= rwAss)#Cương Sửa
                         rwCoat.save()
 
                         rwInputCa = models.RwInputCaLevel1(id = rwAss)
@@ -521,15 +533,16 @@ def processAssessment(ws):
                     if checkComponentAvaiable(ws.cell(row, 0).value, ws.cell(row, 1).value):
                         rwAss = models.RwAssessment(equipmentid_id=getEquipmentID(ws.cell(row, 0).value),
                                                     componentid_id=getComponentID(ws.cell(row, 1).value),
-                                                    assessmentdate=convertDateInsp(ws.cell(row, 7).value),
+                                                    assessmentdate=xldate_to_datetime(ws.cell(row, 7).value),
                                                     riskanalysisperiod=36,
                                                     isequipmentlinked=convertTF(ws.cell(row, 5).value),
                                                     proposalname="New Excel Proposal " + str(
-                                                        datetime.now().strftime('%m-%d-%y')))
+                                                        datetime.datetime.now().strftime('%m-%d-%y')))
                         rwAss.save()
 
                         # Luu lai cac bang trung gian
-                        rwEquip = models.RwEquipment(id=rwAss, commissiondate= datetime.now())
+                        rwEquip = models.RwEquipment(id= rwAss, commissiondate= datetime.datetime.now())
+                        # rwEquip = models.RwEquipment(id=rwAss)  # Cương Sửa
                         rwEquip.save()
 
                         rwComp = models.RwComponent(id=rwAss)
@@ -544,7 +557,8 @@ def processAssessment(ws):
                         rwMater = models.RwMaterial(id=rwAss)
                         rwMater.save()
 
-                        rwCoat = models.RwCoating(id=rwAss, externalcoatingdate= datetime.now())
+                        rwCoat = models.RwCoating(id= rwAss, externalcoatingdate= datetime.datetime.now())
+                        # rwCoat = models.RwCoating(id=rwAss)  # Cương Sửa
                         rwCoat.save()
 
                         rwInputTank = models.RwInputCaTank(id= rwAss)
@@ -569,7 +583,7 @@ def processRwEquipment(ws):
                         for a in listProposal:
                             if a.equipmentid_id == getEquipmentID(ws.cell(row,0).value):
                                 rwEq = models.RwEquipment.objects.get(id=a.id)
-                                rwEq.commissiondate = convertDateInsp(ws.cell(row,7).value)
+                                rwEq.commissiondate = xldate_to_datetime(ws.cell(row,7).value)
                                 rwEq.adminupsetmanagement = convertTF(ws.cell(row,15).value)
                                 rwEq.containsdeadlegs= convertTF(ws.cell(row,28).value)
                                 # rwEq.cyclicoperation= convertTF(ws.cell(row,14).value)
@@ -609,7 +623,7 @@ def processRwEquipment(ws):
                             if a.equipmentid_id == getEquipmentID(ws.cell(row,0).value):
                                 rwEq = models.RwEquipment.objects.get(id= a.id)
                                 rwInputCaTank = models.RwInputCaTank.objects.get(id= a.id)
-                                rwEq.commissiondate = convertDateInsp(ws.cell(row,7).value)
+                                rwEq.commissiondate = xldate_to_datetime(ws.cell(row,7).value)
                                 rwEq.adminupsetmanagement = convertTF(ws.cell(row,15).value)
 
                                 # rwEq.cyclicoperation = convertTF(ws.cell(row,12).value)
@@ -636,7 +650,9 @@ def processRwEquipment(ws):
                                     rwEq.managementfactor = float(ws.cell(row,14).value)
                                 except:
                                     rwEq.managementfactor = 0.1
+                                print("go test type of soil")
                                 if ws.cell(row,31).value:
+                                    print("go typeofsoil")
                                     rwEq.typeofsoil = ws.cell(row,31).value
                                     rwInputCaTank.soil_type = ws.cell(row,31).value
                                 rwEq.distancetogroundwater = convertFloat(ws.cell(row,33).value)
@@ -731,7 +747,7 @@ def processRwComponent(ws):
                                 rwCom.nominaldiameter = convertFloat(ws.cell(row,9).value)
                                 rwInputCaTank.tank_diametter = convertFloat(ws.cell(row,9).value)
                                 rwCom.nominalthickness = convertFloat(ws.cell(row,10).value)
-                                # rwCom.currentthickness = convertFloat(ws.cell(row,11).value)
+                                rwCom.currentthickness = convertFloat(ws.cell(row,11).value)
                                 rwCom.minstructuralthickness = convertFloat(ws.cell(row,11).value)
                                 rwCom.minreqthickness = convertFloat(ws.cell(row,13).value)
                                 rwCom.currentcorrosionrate = convertFloat(ws.cell(row,12).value)
@@ -1013,7 +1029,7 @@ def processCoating(ws):
                             rwCoating.internalcoating = convertTF(ws.cell(row,8).value)
                             rwCoating.externalcoating = convertTF(ws.cell(row,7).value)
                             if ws.cell(row,9).value:
-                                rwCoating.externalcoatingdate = convertDateInsp(ws.cell(row,9).value)
+                                rwCoating.externalcoatingdate = xldate_to_datetime(ws.cell(row,9).value)
                             if ws.cell(row,10).value:
                                 rwCoating.externalcoatingquality = ws.cell(row,10).value
                             rwCoating.supportconfignotallowcoatingmaint = convertTF(ws.cell(row,11).value)
@@ -1074,4 +1090,29 @@ def importPlanProcess(filename):
     except Exception as e:
         print("Exception at import")
         print(e)
+        raise Http404
+
+def ImportSCADA(filename,proposalID):
+    try:
+        workbook = open_workbook(filename)
+        sheet_names = workbook.sheet_names()
+        for name in sheet_names:
+            ws0 = workbook.sheet_by_name(name)
+            key = ws0.row_values(0, 3, 9)
+            value = ws0.row_values(1, 3, 9)
+            eq = models.RwEquipment.objects.get(id=proposalID)
+            eq.volume = value[0]
+            eq.minreqtemperaturepressurisation = value[1]
+            eq.save()
+            com = models.RwComponent.objects.get(id=proposalID)
+            com.nominaldiameter = value[2]
+            com.structuralthickness = value[3]
+            com.save()
+            stream = models.RwStream.objects.get(id=proposalID)
+            stream.flowrate = value[4]
+            stream.waterph = value[5]
+            stream.save()
+    except Exception as e:
+        print(e)
+        print("Exception at import Scada")
         raise Http404

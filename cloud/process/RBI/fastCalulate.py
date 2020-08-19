@@ -10,6 +10,249 @@ from cloud.process.RBI import DM_CAL
 from cloud.process.RBI import CA_CAL
 from cloud.process.RBI import pofConvert
 from cloud.process.RBI import CO_CAL
+from cloud.process.RBI import CA_Flammable
+from cloud.process.RBI import ToxicConsequenceArea
+from cloud.process.RBI import FinancialCOF
+
+def caculateRiskChart(proposalID):
+    listDamage = []
+    DF_EXT_TOTAL_API = []
+    DF_THINNING_TOTAL_API = []
+    DF_SSC_TOTAL_API = []
+    DF_HTHA_API = []
+    DF_BRIT_TOTAL_API = []
+    DF_PIPE_API = []
+    try:
+        rwassessment = models.RwAssessment.objects.get(id=proposalID)
+        rwequipment = models.RwEquipment.objects.get(id=proposalID)
+        rwcomponent = models.RwComponent.objects.get(id=proposalID)
+        rwstream = models.RwStream.objects.get(id=proposalID)
+        rwexcor = models.RwExtcorTemperature.objects.get(id=proposalID)
+        rwcoat = models.RwCoating.objects.get(id=proposalID)
+        rwmaterial = models.RwMaterial.objects.get(id=proposalID)
+
+        comp = models.ComponentMaster.objects.get(componentid=rwassessment.componentid_id)
+        comptype = models.ComponentType.objects.get(componenttypeid=comp.componenttypeid_id)
+
+        if not rwcoat.externalcoating:
+            dm_cal = DM_CAL.DM_CAL(ComponentNumber=str(comp.componentnumber),
+                                   Commissiondate=models.EquipmentMaster.objects.get(
+                                       equipmentid=comp.equipmentid_id).commissiondate,
+                                   AssessmentDate=rwassessment.assessmentdate,
+                                   APIComponentType=models.ApiComponentType.objects.get(
+                                       apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename,
+                                   Diametter=rwcomponent.nominaldiameter, NomalThick=rwcomponent.nominalthickness,
+                                   CurrentThick=rwcomponent.currentthickness, MinThickReq=rwcomponent.minreqthickness,
+                                   CorrosionRate=rwcomponent.currentcorrosionrate, CA=rwmaterial.corrosionallowance,
+                                   CladdingCorrosionRate=rwcoat.claddingcorrosionrate,
+                                   InternalCladding=bool(rwcoat.internalcladding),
+                                   OnlineMonitoring=rwequipment.onlinemonitoring,
+                                   HighlyEffectDeadleg=bool(rwequipment.highlydeadleginsp),
+                                   ContainsDeadlegs=bool(rwequipment.containsdeadlegs),
+                                   LinningType=rwcoat.internallinertype,
+                                   LINNER_ONLINE=bool(rwequipment.lineronlinemonitoring),
+                                   LINNER_CONDITION=rwcoat.internallinercondition,
+                                   INTERNAL_LINNING=bool(rwcoat.internallining),
+                                   HEAT_TREATMENT=rwmaterial.heattreatment,
+                                   NaOHConcentration=rwstream.naohconcentration,
+                                   HEAT_TRACE=bool(rwequipment.heattraced),
+                                   STEAM_OUT=bool(rwequipment.steamoutwaterflush),
+                                   AMINE_EXPOSED=bool(rwstream.exposedtogasamine),
+                                   AMINE_SOLUTION=rwstream.aminesolution,
+                                   ENVIRONMENT_H2S_CONTENT=bool(rwstream.h2s),
+                                   AQUEOUS_OPERATOR=bool(rwstream.aqueousoperation),
+                                   AQUEOUS_SHUTDOWN=bool(rwstream.aqueousshutdown),
+                                   H2SContent=rwstream.h2sinwater, PH=rwstream.waterph,
+                                   PRESENT_CYANIDE=bool(rwstream.cyanide), BRINNEL_HARDNESS=rwcomponent.brinnelhardness,
+                                   SULFUR_CONTENT=rwmaterial.sulfurcontent,
+                                   CO3_CONTENT=rwstream.co3concentration,
+                                   PTA_SUSCEP=bool(rwmaterial.ispta), NICKEL_ALLOY=bool(rwmaterial.nickelbased),
+                                   EXPOSED_SULFUR=bool(rwstream.exposedtosulphur),
+                                   ExposedSH2OOperation=bool(rwequipment.presencesulphideso2),
+                                   ExposedSH2OShutdown=bool(rwequipment.presencesulphideso2shutdown),
+                                   ThermalHistory=rwequipment.thermalhistory, PTAMaterial=rwmaterial.ptamaterialcode,
+                                   DOWNTIME_PROTECTED=bool(rwequipment.downtimeprotectionused),
+                                   INTERNAL_EXPOSED_FLUID_MIST=bool(rwstream.materialexposedtoclint),
+                                   EXTERNAL_EXPOSED_FLUID_MIST=bool(rwequipment.materialexposedtoclext),
+                                   CHLORIDE_ION_CONTENT=rwstream.chloride,
+                                   HF_PRESENT=bool(rwstream.hydrofluoric),
+                                   INTERFACE_SOIL_WATER=bool(rwequipment.interfacesoilwater),
+                                   SUPPORT_COATING=bool(rwcoat.supportconfignotallowcoatingmaint),
+                                   INSULATION_TYPE=rwcoat.externalinsulationtype,
+                                   CUI_PERCENT_1=rwexcor.minus12tominus8, CUI_PERCENT_2=rwexcor.minus8toplus6,
+                                   CUI_PERCENT_3=rwexcor.plus6toplus32, CUI_PERCENT_4=rwexcor.plus32toplus71,
+                                   CUI_PERCENT_5=rwexcor.plus71toplus107,
+                                   CUI_PERCENT_6=rwexcor.plus107toplus121, CUI_PERCENT_7=rwexcor.plus121toplus135,
+                                   CUI_PERCENT_8=rwexcor.plus135toplus162,
+                                   CUI_PERCENT_9=rwexcor.plus162toplus176, CUI_PERCENT_10=rwexcor.morethanplus176,
+                                   EXTERNAL_INSULATION=bool(rwcoat.externalinsulation),
+                                   COMPONENT_INSTALL_DATE=models.EquipmentMaster.objects.get(
+                                       equipmentid=comp.equipmentid_id).commissiondate,
+                                   CRACK_PRESENT=bool(rwcomponent.crackspresent),
+                                   EXTERNAL_EVIRONMENT=rwequipment.externalenvironment,
+                                   EXTERN_COAT_QUALITY=rwcoat.externalcoatingquality,
+                                   PIPING_COMPLEXITY=rwcomponent.complexityprotrusion,
+                                   INSULATION_CONDITION=rwcoat.insulationcondition,
+                                   INSULATION_CHLORIDE=bool(rwcoat.insulationcontainschloride),
+                                   MATERIAL_SUSCEP_HTHA=bool(rwmaterial.ishtha),
+                                   HTHA_MATERIAL=rwmaterial.hthamaterialcode,
+                                   HTHA_PRESSURE=rwstream.h2spartialpressure * 0.006895,
+                                   CRITICAL_TEMP=rwstream.criticalexposuretemperature,
+                                   DAMAGE_FOUND=bool(rwcomponent.damagefoundinspection),
+                                   LOWEST_TEMP=bool(rwequipment.yearlowestexptemp),
+                                   TEMPER_SUSCEP=bool(rwmaterial.temper), PWHT=bool(rwequipment.pwht),
+                                   BRITTLE_THICK=rwcomponent.brittlefracturethickness,
+                                   CARBON_ALLOY=bool(rwmaterial.carbonlowalloy),
+                                   DELTA_FATT=rwcomponent.deltafatt,
+                                   MAX_OP_TEMP=rwstream.maxoperatingtemperature,
+                                   CHROMIUM_12=bool(rwmaterial.chromemoreequal12),
+                                   MIN_OP_TEMP=rwstream.minoperatingtemperature,
+                                   MIN_DESIGN_TEMP=rwmaterial.mindesigntemperature,
+                                   Hydrogen=rwstream.hydrogen,
+                                   REF_TEMP=rwmaterial.referencetemperature,
+                                   AUSTENITIC_STEEL=bool(rwmaterial.austenitic), PERCENT_SIGMA=rwmaterial.sigmaphase,
+                                   EquipmentType=models.EquipmentType.objects.get(
+                                       equipmenttypeid=models.EquipmentMaster.objects.get(
+                                           equipmentid=comp.equipmentid_id).equipmenttypeid_id).equipmenttypename,
+                                   PREVIOUS_FAIL=rwcomponent.previousfailures,
+                                   AMOUNT_SHAKING=rwcomponent.shakingamount, TIME_SHAKING=rwcomponent.shakingtime,
+                                   CYLIC_LOAD=rwcomponent.cyclicloadingwitin15_25m,
+                                   CORRECT_ACTION=rwcomponent.correctiveaction, NUM_PIPE=rwcomponent.numberpipefittings,
+                                   PIPE_CONDITION=rwcomponent.pipecondition, JOINT_TYPE=rwcomponent.branchjointtype,
+                                   BRANCH_DIAMETER=rwcomponent.branchdiameter,
+                                   TensileStrengthDesignTemp=rwmaterial.tensilestrength,
+                                   StructuralThickness=rwcomponent.structuralthickness,
+                                   MINIUM_STRUCTURAL_THICKNESS_GOVERS=rwcomponent.minstructuralthickness,
+                                   WeldJonintEfficiency=rwcomponent.weldjointefficiency,
+                                   AllowableStress=rwcomponent.allowablestress,
+                                   YeildStrengthDesignTemp=rwmaterial.yieldstrength, Pressure=rwmaterial.designpressure,
+                                   ShapeFactor=comptype.shapefactor,
+                                   CR_Confidents_Level=rwcomponent.confidencecorrosionrate,
+                                   PRESSSURE_CONTROL=bool(rwequipment.pressurisationcontrolled),
+                                   FABRICATED_STEEL=bool(rwcomponent.fabricatedsteel),
+                                   EQUIPMENT_SATISFIED=bool(rwcomponent.equipmentsatisfied),
+                                   NOMINAL_OPERATING_CONDITIONS=bool(rwcomponent.nominaloperatingconditions),
+                                   CET_THE_MAWP=bool(rwcomponent.cetgreaterorequal),
+                                   CYCLIC_SERVICE=bool(rwcomponent.cyclicservice),
+                                   EQUIPMENT_CIRCUIT_SHOCK=bool(rwcomponent.equipmentcircuitshock),
+                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation)
+        else:
+            dm_cal = DM_CAL.DM_CAL(ComponentNumber=str(comp.componentnumber),
+                                   Commissiondate=models.EquipmentMaster.objects.get(
+                                       equipmentid=comp.equipmentid_id).commissiondate,
+                                   AssessmentDate=rwassessment.assessmentdate,
+                                   APIComponentType=models.ApiComponentType.objects.get(
+                                       apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename,
+                                   Diametter=rwcomponent.nominaldiameter, NomalThick=rwcomponent.nominalthickness,
+                                   CurrentThick=rwcomponent.currentthickness, MinThickReq=rwcomponent.minreqthickness,
+                                   CorrosionRate=rwcomponent.currentcorrosionrate, CA=rwmaterial.corrosionallowance,
+                                   CladdingCorrosionRate=rwcoat.claddingcorrosionrate,
+                                   InternalCladding=bool(rwcoat.internalcladding),
+                                   OnlineMonitoring=rwequipment.onlinemonitoring,
+                                   HighlyEffectDeadleg=bool(rwequipment.highlydeadleginsp),
+                                   ContainsDeadlegs=bool(rwequipment.containsdeadlegs),
+                                   LinningType=rwcoat.internallinertype,
+                                   LINNER_ONLINE=bool(rwequipment.lineronlinemonitoring),
+                                   LINNER_CONDITION=rwcoat.internallinercondition,
+                                   INTERNAL_LINNING=bool(rwcoat.internallining),
+                                   HEAT_TREATMENT=rwmaterial.heattreatment,
+                                   NaOHConcentration=rwstream.naohconcentration,
+                                   HEAT_TRACE=bool(rwequipment.heattraced),
+                                   STEAM_OUT=bool(rwequipment.steamoutwaterflush),
+                                   AMINE_EXPOSED=bool(rwstream.exposedtogasamine),
+                                   AMINE_SOLUTION=rwstream.aminesolution,
+                                   ENVIRONMENT_H2S_CONTENT=bool(rwstream.h2s),
+                                   AQUEOUS_OPERATOR=bool(rwstream.aqueousoperation),
+                                   AQUEOUS_SHUTDOWN=bool(rwstream.aqueousshutdown),
+                                   H2SContent=rwstream.h2sinwater, PH=rwstream.waterph,
+                                   PRESENT_CYANIDE=bool(rwstream.cyanide), BRINNEL_HARDNESS=rwcomponent.brinnelhardness,
+                                   SULFUR_CONTENT=rwmaterial.sulfurcontent,
+                                   CO3_CONTENT=rwstream.co3concentration,
+                                   PTA_SUSCEP=bool(rwmaterial.ispta), NICKEL_ALLOY=bool(rwmaterial.nickelbased),
+                                   EXPOSED_SULFUR=bool(rwstream.exposedtosulphur),
+                                   Hydrogen=rwstream.hydrogen,
+                                   ExposedSH2OOperation=bool(rwequipment.presencesulphideso2),
+                                   ExposedSH2OShutdown=bool(rwequipment.presencesulphideso2shutdown),
+                                   ThermalHistory=rwequipment.thermalhistory, PTAMaterial=rwmaterial.ptamaterialcode,
+                                   DOWNTIME_PROTECTED=bool(rwequipment.downtimeprotectionused),
+                                   INTERNAL_EXPOSED_FLUID_MIST=bool(rwstream.materialexposedtoclint),
+                                   EXTERNAL_EXPOSED_FLUID_MIST=bool(rwequipment.materialexposedtoclext),
+                                   CHLORIDE_ION_CONTENT=rwstream.chloride,
+                                   HF_PRESENT=bool(rwstream.hydrofluoric),
+                                   INTERFACE_SOIL_WATER=bool(rwequipment.interfacesoilwater),
+                                   SUPPORT_COATING=bool(rwcoat.supportconfignotallowcoatingmaint),
+                                   INSULATION_TYPE=rwcoat.externalinsulationtype,
+                                   CUI_PERCENT_1=rwexcor.minus12tominus8, CUI_PERCENT_2=rwexcor.minus8toplus6,
+                                   CUI_PERCENT_3=rwexcor.plus6toplus32, CUI_PERCENT_4=rwexcor.plus32toplus71,
+                                   CUI_PERCENT_5=rwexcor.plus71toplus107,
+                                   CUI_PERCENT_6=rwexcor.plus107toplus121, CUI_PERCENT_7=rwexcor.plus121toplus135,
+                                   CUI_PERCENT_8=rwexcor.plus135toplus162,
+                                   CUI_PERCENT_9=rwexcor.plus162toplus176, CUI_PERCENT_10=rwexcor.morethanplus176,
+                                   EXTERNAL_INSULATION=bool(rwcoat.externalinsulation),
+                                   COMPONENT_INSTALL_DATE=rwcoat.externalcoatingdate,
+                                   CRACK_PRESENT=bool(rwcomponent.crackspresent),
+                                   EXTERNAL_EVIRONMENT=rwequipment.externalenvironment,
+                                   EXTERN_COAT_QUALITY=rwcoat.externalcoatingquality,
+                                   PIPING_COMPLEXITY=rwcomponent.complexityprotrusion,
+                                   INSULATION_CONDITION=rwcoat.insulationcondition,
+                                   INSULATION_CHLORIDE=bool(rwcoat.insulationcontainschloride),
+                                   MATERIAL_SUSCEP_HTHA=bool(rwmaterial.ishtha),
+                                   HTHA_MATERIAL=rwmaterial.hthamaterialcode,
+                                   HTHA_PRESSURE=rwstream.h2spartialpressure * 0.006895,
+                                   CRITICAL_TEMP=rwstream.criticalexposuretemperature,
+                                   DAMAGE_FOUND=bool(rwcomponent.damagefoundinspection),
+                                   LOWEST_TEMP=bool(rwequipment.yearlowestexptemp),
+                                   TEMPER_SUSCEP=bool(rwmaterial.temper), PWHT=bool(rwequipment.pwht),
+                                   BRITTLE_THICK=rwcomponent.brittlefracturethickness,
+                                   CARBON_ALLOY=bool(rwmaterial.carbonlowalloy),
+                                   DELTA_FATT=rwcomponent.deltafatt,
+                                   MAX_OP_TEMP=rwstream.maxoperatingtemperature,
+                                   CHROMIUM_12=bool(rwmaterial.chromemoreequal12),
+                                   MIN_OP_TEMP=rwstream.minoperatingtemperature,
+                                   MIN_DESIGN_TEMP=rwmaterial.mindesigntemperature,
+                                   REF_TEMP=rwmaterial.referencetemperature,
+                                   AUSTENITIC_STEEL=bool(rwmaterial.austenitic), PERCENT_SIGMA=rwmaterial.sigmaphase,
+                                   EquipmentType=models.EquipmentType.objects.get(
+                                       equipmenttypeid=models.EquipmentMaster.objects.get(
+                                           equipmentid=comp.equipmentid_id).equipmenttypeid_id).equipmenttypename,
+                                   PREVIOUS_FAIL=rwcomponent.previousfailures,
+                                   AMOUNT_SHAKING=rwcomponent.shakingamount, TIME_SHAKING=rwcomponent.shakingtime,
+                                   CYLIC_LOAD=rwcomponent.cyclicloadingwitin15_25m,
+                                   CORRECT_ACTION=rwcomponent.correctiveaction, NUM_PIPE=rwcomponent.numberpipefittings,
+                                   PIPE_CONDITION=rwcomponent.pipecondition, JOINT_TYPE=rwcomponent.branchjointtype,
+                                   BRANCH_DIAMETER=rwcomponent.branchdiameter,
+                                   TensileStrengthDesignTemp=rwmaterial.tensilestrength,
+                                   StructuralThickness=rwcomponent.structuralthickness,
+                                   MINIUM_STRUCTURAL_THICKNESS_GOVERS=rwcomponent.minstructuralthickness,
+                                   WeldJonintEfficiency=rwcomponent.weldjointefficiency,
+                                   AllowableStress=rwcomponent.allowablestress,
+                                   YeildStrengthDesignTemp=rwmaterial.yieldstrength, Pressure=rwmaterial.designpressure,
+                                   ShapeFactor=comptype.shapefactor,
+                                   CR_Confidents_Level=rwcomponent.confidencecorrosionrate,
+                                   PRESSSURE_CONTROL=bool(rwequipment.pressurisationcontrolled),
+                                   FABRICATED_STEEL=bool(rwcomponent.fabricatedsteel),
+                                   EQUIPMENT_SATISFIED=bool(rwcomponent.equipmentsatisfied),
+                                   NOMINAL_OPERATING_CONDITIONS=bool(rwcomponent.nominaloperatingconditions),
+                                   CET_THE_MAWP=bool(rwcomponent.cetgreaterorequal),
+                                   CYCLIC_SERVICE=bool(rwcomponent.cyclicservice),
+                                   EQUIPMENT_CIRCUIT_SHOCK=bool(rwcomponent.equipmentcircuitshock),
+                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation)
+        for a in dm_cal.DF_RISK_CHART_THINNING():
+            DF_THINNING_TOTAL_API.append(a)
+        for a in dm_cal.DF_RISK_CHART_EXT():
+            DF_EXT_TOTAL_API.append(a)
+        for a in dm_cal.DF_RISK_CHART_SSC():
+            DF_SSC_TOTAL_API.append(a)
+        for a in dm_cal.DF_RISK_CHART_HTHA():
+            DF_HTHA_API.append(a)
+        for a in dm_cal.DF_RISK_CHART_BRIT():
+            DF_BRIT_TOTAL_API.append(a)
+        for a in dm_cal.DF_RISK_CHART_PIPE():
+            DF_PIPE_API.append(a)
+        listDamage = [DF_THINNING_TOTAL_API, DF_EXT_TOTAL_API,DF_SSC_TOTAL_API,DF_HTHA_API,DF_BRIT_TOTAL_API,DF_PIPE_API]
+    except Exception as e:
+        print(e)
+    return listDamage
 
 def caculateCorrisionRate(proposalID):
     try:
@@ -39,7 +282,6 @@ def caculateCorrisionRate(proposalID):
         print("Exception at fast calculate")
         print(e)
 
-
 def calculateNormal(proposalID):
     try:
         rwassessment = models.RwAssessment.objects.get(id=proposalID)
@@ -52,6 +294,7 @@ def calculateNormal(proposalID):
         rwinputca = models.RwInputCaLevel1.objects.get(id=proposalID)
         countRefullPOF = models.RwFullPof.objects.filter(id=proposalID)
         countCalv1 = models.RwCaLevel1.objects.filter(id=proposalID)
+        rwcofholesize = models.RwFullCoFHoleSize.objects.filter(id=proposalID)
         damageMachinsm = models.RwDamageMechanism.objects.filter(id_dm=proposalID)
         countRefullfc = models.RwFullFcof.objects.filter(id=proposalID)
         chart = models.RwDataChart.objects.filter(id=proposalID)
@@ -254,20 +497,24 @@ def calculateNormal(proposalID):
                                    MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation)
         ca_cal = CA_CAL.CA_NORMAL(NominalDiametter=rwcomponent.nominaldiameter,
                                   MATERIAL_COST=rwmaterial.costfactor, FLUID=rwinputca.api_fluid,
-                                  FLUID_PHASE=rwinputca.system,
-                                  API_COMPONENT_TYPE_NAME=models.ApiComponentType.objects.get(apicomponenttypeid= comp.apicomponenttypeid).apicomponenttypename,
+                                  FLUID_PHASE=rwstream.storagephase,
+                                  MAX_OPERATING_TEMP=rwstream.maxoperatingtemperature,
+                                  API_COMPONENT_TYPE_NAME=models.ApiComponentType.objects.get(
+                                      apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename,
                                   DETECTION_TYPE=rwinputca.detection_type,
-                                  ISULATION_TYPE=rwinputca.isulation_type, STORED_PRESSURE=rwstream.minoperatingpressure * 6.895,
-                                  ATMOSPHERIC_PRESSURE=101, STORED_TEMP=rwstream.minoperatingtemperature + 273,
+                                  ISOLATION_TYPE=rwinputca.isulation_type,
+                                  STORED_PRESSURE=rwstream.maxoperatingpressure*1000,
+                                  ATMOSPHERIC_PRESSURE=101.325, STORED_TEMP=rwstream.minoperatingtemperature + 273,
                                   MASS_INVERT=rwinputca.mass_inventory,
                                   MASS_COMPONENT=rwinputca.mass_component,
                                   MITIGATION_SYSTEM=rwinputca.mitigation_system,
                                   TOXIC_PERCENT=rwinputca.toxic_percent,
                                   RELEASE_DURATION=rwinputca.release_duration,
-                                  PRODUCTION_COST=rwinputca.production_cost,
+                                  PRODUCTION_COST=rwinputca.production_cost, TOXIC_FLUID=rwinputca.toxic_fluid,
                                   INJURE_COST=rwinputca.injure_cost, ENVIRON_COST=rwinputca.evironment_cost,
                                   PERSON_DENSITY=rwinputca.personal_density,
                                   EQUIPMENT_COST=rwinputca.equipment_cost)
+
         TOTAL_DF_API1 = dm_cal.DF_TOTAL_API(0)
         TOTAL_DF_API2 = dm_cal.DF_TOTAL_API(3)
         TOTAL_DF_API3 = dm_cal.DF_TOTAL_API(6)
@@ -376,43 +623,175 @@ def calculateNormal(proposalID):
 
             refullPOF.save()
         # ca level 1( CoF)
-        if countCalv1.count() != 0:
-            calv1 = models.RwCaLevel1.objects.get(id=proposalID)
-            if ca_cal.NominalDiametter == 0 or ca_cal.STORED_PRESSURE == 0 or ca_cal.MASS_INVERT == 0 or ca_cal.MASS_COMPONENT == 0 or ca_cal.FLUID is None:
-                calv1.fc_total = 100000000
-                calv1.fcof_category = "E"
-            else:
-                calv1.release_phase = ca_cal.GET_RELEASE_PHASE()
-                calv1.fact_di = ca_cal.fact_di()
-                calv1.ca_inj_flame = ca_cal.ca_inj_flame()
-                calv1.ca_inj_toxic = ca_cal.ca_inj_tox()
-                calv1.ca_inj_ntnf = ca_cal.ca_inj_nfnt()
-                calv1.fact_mit = ca_cal.fact_mit()
-                calv1.fact_ait = ca_cal.fact_ait()
-                calv1.ca_cmd = ca_cal.ca_cmd()
-                calv1.fc_cmd = ca_cal.fc_cmd()
-                calv1.fc_affa = ca_cal.fc_affa()
-                calv1.fc_envi = ca_cal.fc_environ()
-                calv1.fc_prod = ca_cal.fc_prod()
-                calv1.fc_inj = ca_cal.fc_inj()
-                calv1.fc_total = ca_cal.fc()
-                calv1.fcof_category = ca_cal.FC_Category(ca_cal.fc())
-            calv1.save()
-        else:
-            if ca_cal.NominalDiametter == 0 or ca_cal.STORED_PRESSURE == 0 or ca_cal.MASS_INVERT == 0 or ca_cal.MASS_COMPONENT == 0 or ca_cal.FLUID is None:
-                calv1 = models.RwCaLevel1(id=rwassessment,
-                                              fc_total=100000000, fcof_category="E")
-            else:
-                calv1 = models.RwCaLevel1(id=rwassessment, release_phase=ca_cal.GET_RELEASE_PHASE(),
-                                              fact_di=ca_cal.fact_di(), ca_inj_flame=ca_cal.ca_inj_flame(),
-                                              ca_inj_toxic=ca_cal.ca_inj_tox(), ca_inj_ntnf=ca_cal.ca_inj_nfnt(),
-                                              fact_mit=ca_cal.fact_mit(), fact_ait=ca_cal.fact_ait(),
-                                              ca_cmd=ca_cal.ca_cmd(), fc_cmd=ca_cal.fc_cmd(),
-                                              fc_affa=ca_cal.fc_affa(), fc_envi=ca_cal.fc_environ(),
-                                              fc_prod=ca_cal.fc_prod(), fc_inj=ca_cal.fc_inj(),
-                                              fc_total=ca_cal.fc(), fcof_category=ca_cal.FC_Category(ca_cal.fc()))
+        try:
+            print('test cof level 1')
+            toxic_fluid = rwinputca.api_fluid
+            phase_fluid_storage = rwstream.storagephase
+            api_com_type = models.ApiComponentType.objects.get(
+                                   apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename
+            toxic_fluid_percentage = rwinputca.toxic_percent
+            model_fluid = rwinputca.api_fluid
+            MATERIAL_COST = rwmaterial.costfactor
+            caflammable = CA_Flammable.CA_Flammable(toxic_fluid, phase_fluid_storage,
+                                                    rwinputca.mitigation_system, proposalID,
+                                                    rwstream.minoperatingtemperature + 273,
+                                                    api_com_type, toxic_fluid_percentage)
+            catoxic = ToxicConsequenceArea.CA_Toxic(proposalID, rwinputca.toxic_fluid, caflammable.ReleasePhase(),
+                                                    toxic_fluid_percentage, api_com_type)
+            CA_cmd = caflammable.CA_Flam_Cmd()
+            CA_inj = max(caflammable.CA_Flam_inj(),catoxic.CA_toxic_inj(),catoxic.NoneCA_leck())
+            fullcof = FinancialCOF.FinancialCOF(proposalID, model_fluid, toxic_fluid,
+                                                toxic_fluid_percentage, api_com_type,
+                                                MATERIAL_COST, CA_cmd, CA_inj)
+            print("ok1")
+            if rwcofholesize.count() != 0:
+                print('test cof level 11')
+                calv1 = models.RwCaLevel1.objects.get(id=proposalID)
+                rwholesize = models.RwFullCoFHoleSize.objects.get(id=proposalID)
 
-            calv1.save()
+                # if ca_cal.NominalDiametter == 0 or ca_cal.STORED_PRESSURE == 0 or ca_cal.MASS_INVERT == 0 or ca_cal.MASS_COMPONENT == 0 or ca_cal.FLUID is None:
+                #     calv1.fc_total = 100000000
+                #     calv1.fcof_category = "E"
+                # else:
+                # calv1.release_phase = ca_cal.GET_RELEASE_PHASE()
+                # calv1.fact_di = ca_cal.fact_di()
+                # calv1.ca_inj_flame = ca_cal.ca_inj_flame()
+                # calv1.ca_final = ca_cal.ca_final()
+                # calv1.ca_inj_toxic = ca_cal.ca_inj_tox()
+                # calv1.ca_inj_ntnf = ca_cal.ca_inj_nfnt()
+                # calv1.fact_mit = ca_cal.fact_mit()
+                # calv1.fact_ait = ca_cal.fact_ait()
+                # calv1.ca_cmd = ca_cal.ca_cmd()
+                # calv1.fc_cmd = ca_cal.fc_cmd()
+                # calv1.fc_affa = ca_cal.fc_affa()
+                # calv1.fc_envi = ca_cal.fc_environ()
+                # calv1.fc_prod = ca_cal.fc_prod()
+                # calv1.fc_inj = ca_cal.fc_inj()
+
+                # calv1.auto_ignition = ca_cal.auto_ignition_temp()
+                # calv1.ideal_gas = ca_cal.C_P()
+                # calv1.ideal_gas_ratio = ca_cal.ideal_gas_ratio()
+                # calv1.liquid_density = ca_cal.liquid_density()
+                # calv1.ambient = ca_cal.ambient()
+                # calv1.mw = ca_cal.moleculer_weight()
+                # calv1.nbp = ca_cal.NBP()
+                # calv1.model_fluid_type = ca_cal.model_fluid_type()
+                # calv1.toxic_fluid_type = ca_cal.toxic_fluid_type()
+
+                rwholesize.gff_small = ca_cal.gff(1)
+                rwholesize.gff_medium = ca_cal.gff(2)
+                rwholesize.gff_large = ca_cal.gff(3)
+                rwholesize.gff_rupture = ca_cal.gff(4)
+                rwholesize.an_small = ca_cal.a_n(1)
+                rwholesize.an_medium = ca_cal.a_n(2)
+                rwholesize.an_large = ca_cal.a_n(3)
+                rwholesize.an_rupture = ca_cal.a_n(4)
+                rwholesize.wn_small = ca_cal.W_n(1)
+                rwholesize.wn_medium = ca_cal.W_n(2)
+                rwholesize.wn_large = ca_cal.W_n(3)
+                rwholesize.wn_rupture = ca_cal.W_n(4)
+                rwholesize.mass_add_n_small = ca_cal.mass_addn(1)
+                rwholesize.mass_add_n_medium = ca_cal.mass_addn(2)
+                rwholesize.mass_add_n_large = ca_cal.mass_addn(3)
+                rwholesize.mass_add_n_rupture = ca_cal.mass_addn(4)
+                rwholesize.mass_avail_n_small = ca_cal.mass_avail_n(1)
+                rwholesize.mass_avail_n_medium = ca_cal.mass_avail_n(2)
+                rwholesize.mass_avail_n_large = ca_cal.mass_avail_n(3)
+                rwholesize.mass_avail_n_rupture = ca_cal.mass_avail_n(4)
+                rwholesize.t_n_small = ca_cal.t_n(1)
+                rwholesize.t_n_medium = ca_cal.t_n(2)
+                rwholesize.t_n_large = ca_cal.t_n(3)
+                rwholesize.t_n_rupture = ca_cal.t_n(4)
+                rwholesize.releasetype_small = ca_cal.releaseType(1)
+                rwholesize.releasetype_medium = ca_cal.releaseType(2)
+                rwholesize.releasetype_large = ca_cal.releaseType(3)
+                rwholesize.releasetype_rupture = ca_cal.releaseType(4)
+                rwholesize.ld_max_n_small = ca_cal.ld_n_max(1)
+                rwholesize.ld_max_n_medium = ca_cal.ld_n_max(2)
+                rwholesize.ld_max_n_large = ca_cal.ld_n_max(3)
+                rwholesize.ld_max_n_rupture = ca_cal.ld_n_max(4)
+                rwholesize.rate_n_small = ca_cal.rate_n(1)
+                rwholesize.rate_n_medium = ca_cal.rate_n(2)
+                rwholesize.rate_n_large = ca_cal.rate_n(3)
+                rwholesize.rate_n_rupture = ca_cal.rate_n(4)
+                rwholesize.ld_n_small = ca_cal.ld_n(1)
+                rwholesize.ld_n_medium = ca_cal.ld_n(2)
+                rwholesize.ld_n_large = ca_cal.ld_n(3)
+                rwholesize.ld_n_rupture = ca_cal.ld_n(4)
+                rwholesize.mass_n_small = ca_cal.mass_n(1)
+                rwholesize.mass_n_medium = ca_cal.mass_n(2)
+                rwholesize.mass_n_large = ca_cal.mass_n(3)
+                rwholesize.mass_n_rupture = ca_cal.mass_n(4)
+                rwholesize.eneff_n_small = ca_cal.eneff_n(1)
+                rwholesize.eneff_n_medium = ca_cal.eneff_n(2)
+                rwholesize.eneff_n_large = ca_cal.eneff_n(3)
+                rwholesize.eneff_n_rupture = ca_cal.eneff_n(4)
+                rwholesize.factIC_n_small = ca_cal.fact_n_ic(1)
+                rwholesize.factIC_n_medium =ca_cal.fact_n_ic(2)
+                rwholesize.factIC_n_large =ca_cal.fact_n_ic(3)
+                rwholesize.factIC_n_rupture =ca_cal.fact_n_ic(4)
+                rwholesize.save()
+                calv1.fc_total = fullcof.FC_total()
+                calv1.fcof_category = fullcof.FC_Category()
+                calv1.save()
+            else:
+                # if ca_cal.NominalDiametter == 0 or ca_cal.STORED_PRESSURE == 0 or ca_cal.MASS_INVERT == 0 or ca_cal.MASS_COMPONENT == 0 or ca_cal.FLUID is None:
+                #     calv1 = models.RwCaLevel1(id=rwassessment,
+                #                                   fc_total=100000000, fcof_category="E",
+                #                               )
+                #
+                # else:
+                rwholesize = models.RwFullCoFHoleSize(id=rwassessment,
+                                                      an_small=ca_cal.a_n(1),
+                                                      an_medium=ca_cal.a_n(2),
+                                                      an_large=ca_cal.a_n(3),
+                                                      an_rupture=ca_cal.a_n(4),
+                                                      wn_small=ca_cal.W_n(1),
+                                                      wn_medium=ca_cal.W_n(2),
+                                                      wn_large=ca_cal.W_n(3),
+                                                      wn_rupture=ca_cal.W_n(4),
+                                                      mass_add_n_small=ca_cal.mass_addn(1),
+                                                      mass_add_n_medium=ca_cal.mass_addn(2),
+                                                      mass_add_n_large=ca_cal.mass_addn(3),
+                                                      mass_add_n_rupture=ca_cal.mass_addn(4),
+                                                      mass_avail_n_small=ca_cal.mass_avail_n(1),
+                                                      mass_avail_n_medium=ca_cal.mass_avail_n(2),
+                                                      mass_avail_n_large=ca_cal.mass_avail_n(3),
+                                                      mass_avail_n_rupture=ca_cal.mass_avail_n(4),
+                                                      t_n_small=ca_cal.t_n(1),
+                                                      t_n_medium=ca_cal.t_n(2),
+                                                      t_n_large=ca_cal.t_n(3),
+                                                      t_n_rupture=ca_cal.t_n(4),
+                                                      releasetype_small=ca_cal.releaseType(1),
+                                                      releasetype_medium=ca_cal.releaseType(2),
+                                                      releasetype_large=ca_cal.releaseType(3),
+                                                      releasetype_rupture=ca_cal.releaseType(4),
+                                                      ld_max_n_small=ca_cal.ld_n_max(1),
+                                                      ld_max_n_medium=ca_cal.ld_n_max(2),
+                                                      ld_max_n_large=ca_cal.ld_n_max(3),
+                                                      ld_max_n_rupture=ca_cal.ld_n_max(4),
+                                                      rate_n_small=ca_cal.rate_n(1),
+                                                      rate_n_medium=ca_cal.rate_n(2),
+                                                      rate_n_large=ca_cal.rate_n(3),
+                                                      rate_n_rupture=ca_cal.rate_n(4),
+                                                      ld_n_small=ca_cal.ld_n(1),
+                                                      ld_n_medium=ca_cal.ld_n(2),
+                                                      ld_n_large=ca_cal.ld_n(3),
+                                                      ld_n_rupture=ca_cal.ld_n(4),
+                                                      mass_n_small=ca_cal.mass_n(1),
+                                                      mass_n_medium=ca_cal.mass_n(2),
+                                                      mass_n_large=ca_cal.mass_n(3),
+                                                      mass_n_rupture=ca_cal.mass_n(4))
+                rwholesize.save()
+                calv1 = models.RwCaLevel1(id=rwassessment,
+                                              fc_total=fullcof.FC_total(), fcof_category=fullcof.FC_Category()
+                                          )
+                calv1.save()
+            # print('ca_final = ',ca_cal.ca_final() )
+            # print('fact_di = ', calv1.fact_di, )
+        except Exception as e:
+            print(e)
+            print('test ca_cal.final')
         # damage machinsm
         damageList = dm_cal.ISDF()
         for dm in damageMachinsm:
@@ -504,6 +883,10 @@ def calculateTank(proposalID):
         damageMachinsm = models.RwDamageMechanism.objects.filter(id_dm=proposalID)
         countRefullfc = models.RwFullFcof.objects.filter(id=proposalID)
         chart = models.RwDataChart.objects.filter(id=proposalID)
+        FullFCof = models.RwFullFcof.objects.filter(id=proposalID)
+        rwFullCofTank =models.RWFullCofTank.objects.filter(id=proposalID)
+        # print(proposalID)
+        # print(rwFullCofTank.prodcost)
 
         comp = models.ComponentMaster.objects.get(componentid=rwassessment.componentid_id)
         eq = models.EquipmentMaster.objects.get(equipmentid=rwassessment.equipmentid_id)
@@ -512,7 +895,7 @@ def calculateTank(proposalID):
         comptype = models.ComponentType.objects.get(componenttypeid=comp.componenttypeid_id)
 
         isshell = False
-        if comp.componenttypeid_id == 8 or comp.componenttypeid_id == 14:
+        if comp.componenttypeid_id == 9 or comp.componenttypeid_id == 13:
             isshell = True
         if not rwcoat.externalcoating:
             dm_cal = DM_CAL.DM_CAL(ComponentNumber=str(comp.componentnumber),
@@ -615,7 +998,8 @@ def calculateTank(proposalID):
                                    CET_THE_MAWP=bool(rwcomponent.cetgreaterorequal),
                                    CYCLIC_SERVICE=bool(rwcomponent.cyclicservice),
                                    EQUIPMENT_CIRCUIT_SHOCK=bool(rwcomponent.equipmentcircuitshock),
-                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation)
+                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation,
+                                   TankMaintain653=rwequipment.tankismaintained)
         else:
             dm_cal = DM_CAL.DM_CAL(ComponentNumber=str(comp.componentnumber),
                                    Commissiondate=models.EquipmentMaster.objects.get(
@@ -716,20 +1100,54 @@ def calculateTank(proposalID):
                                    CET_THE_MAWP=bool(rwcomponent.cetgreaterorequal),
                                    CYCLIC_SERVICE=bool(rwcomponent.cyclicservice),
                                    EQUIPMENT_CIRCUIT_SHOCK=bool(rwcomponent.equipmentcircuitshock),
-                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation)
+                                   MIN_TEMP_PRESSURE=rwequipment.minreqtemperaturepressurisation,
+                                   TankMaintain653=rwequipment.tankismaintained)
+
         if isshell:
-            cacal = CA_CAL.CA_SHELL(FLUID=rwinputca.api_fluid, FLUID_HEIGHT=rwstream.fluidheight,
-                                    SHELL_COURSE_HEIGHT=rwinputca.shell_course_height,
-                                    TANK_DIAMETER=rwcomponent.nominaldiameter,
-                                    EnvironSensitivity=rwequipment.environmentsensitivity,
-                                    P_lvdike=rwstream.fluidleavedikepercent,
-                                    P_onsite=rwstream.fluidleavedikeremainonsitepercent,
-                                    P_offsite=rwstream.fluidgooffsitepercent,
-                                    MATERIAL_COST=rwmaterial.costfactor,
-                                    API_COMPONENT_TYPE_NAME=models.ApiComponentType.objects.get(apicomponenttypeid= comp.apicomponenttypeid).apicomponenttypename,
-                                    PRODUCTION_COST=rwinputca.productioncost)
+            if rwFullCofTank.count()==0:
+                cacal = CA_CAL.CA_SHELL(FLUID=rwinputca.api_fluid, FLUID_HEIGHT=rwstream.fluidheight,
+                                        SHELL_COURSE_HEIGHT=rwinputca.shell_course_height,
+                                        TANK_DIAMETER=rwcomponent.nominaldiameter,
+                                        EnvironSensitivity=rwequipment.environmentsensitivity,
+                                        P_lvdike=rwstream.fluidleavedikepercent,
+                                        P_onsite=rwstream.fluidleavedikeremainonsitepercent,
+                                        P_offsite=rwstream.fluidgooffsitepercent,
+                                        MATERIAL_COST=rwmaterial.costfactor,
+                                        API_COMPONENT_TYPE_NAME=models.ApiComponentType.objects.get(
+                                            apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename,
+                                        PRODUCTION_COST=rwinputca.productioncost,
+                                        Soil_type=rwequipment.typeofsoil,
+                                        TANK_FLUID=rwstream.tankfluidname,
+                                        CHT=rwcomponent.shellheight,PROD_COST=0,
+                                        EQUIP_OUTAGE_MULTIPLIER=0,
+                                        EQUIP_COST=0,POP_DENS=0,
+                                        INJ_COST=0)
+                                        # EQUIPMENT_COST=FullFCof.equipcost)
+            else:
+                rwFullCofTank = models.RWFullCofTank.objects.get(id=proposalID)
+                cacal = CA_CAL.CA_SHELL(FLUID=rwinputca.api_fluid, FLUID_HEIGHT=rwstream.fluidheight,
+                                        SHELL_COURSE_HEIGHT=rwinputca.shell_course_height,
+                                        TANK_DIAMETER=rwcomponent.nominaldiameter,
+                                        EnvironSensitivity=rwequipment.environmentsensitivity,
+                                        P_lvdike=rwstream.fluidleavedikepercent,
+                                        P_onsite=rwstream.fluidleavedikeremainonsitepercent,
+                                        P_offsite=rwstream.fluidgooffsitepercent,
+                                        MATERIAL_COST=rwmaterial.costfactor,
+                                        API_COMPONENT_TYPE_NAME=models.ApiComponentType.objects.get(
+                                            apicomponenttypeid=comp.apicomponenttypeid).apicomponenttypename,
+                                        PRODUCTION_COST=rwinputca.productioncost,
+                                        Soil_type=rwequipment.typeofsoil,
+                                        TANK_FLUID=rwstream.tankfluidname,
+                                        CHT=rwcomponent.shellheight, PROD_COST=rwFullCofTank.prodcost,
+                                        EQUIP_OUTAGE_MULTIPLIER=rwFullCofTank.equipoutagemultiplier,
+                                        EQUIP_COST=rwFullCofTank.equipcost, POP_DENS=rwFullCofTank.popdens,
+                                        INJ_COST=rwFullCofTank.injcost)
+                # EQUIPMENT_COST=FullFCof.equipcost)
             if countRwcatank.count() != 0:
                 rwcatank = models.RwCaTank.objects.get(id=proposalID)
+                rwcatank.hydraulic_water = cacal.k_h_water()
+                rwcatank.hydraulic_fluid = cacal.k_h_prod()
+                rwcatank.seepage_velocity = cacal.vel_s_prod()
                 rwcatank.flow_rate_d1 = cacal.W_n_Tank(1)
                 rwcatank.flow_rate_d2 = cacal.W_n_Tank(2)
                 rwcatank.flow_rate_d3 = cacal.W_n_Tank(3)
@@ -742,9 +1160,9 @@ def calculateTank(proposalID):
                 rwcatank.release_volume_leak_d2 = cacal.Bbl_leak_n(2)
                 rwcatank.release_volume_leak_d3 = cacal.Bbl_leak_n(3)
                 rwcatank.release_volume_leak_d4 = cacal.Bbl_leak_n(4)
-                rwcatank.release_volume_rupture = cacal.Bbl_rupture_release()
-                rwcatank.liquid_height = cacal.FLUID_HEIGHT
-                rwcatank.volume_fluid = cacal.Bbl_total_shell()
+                rwcatank.release_volume_rupture = cacal.Bbl_rupture_n()
+                rwcatank.liquid_height = cacal.LHT_above()
+                rwcatank.volume_fluid = cacal.Lvol_abouve()
                 rwcatank.time_leak_ground = cacal.ld_tank(4)
                 rwcatank.volume_subsoil_leak_d1 = cacal.Bbl_leak_release()
                 rwcatank.volume_subsoil_leak_d4 = cacal.Bbl_rupture_release()
@@ -763,15 +1181,22 @@ def calculateTank(proposalID):
                 rwcatank.fc_environ = cacal.FC_environ_shell()
                 rwcatank.material_factor = rwmaterial.costfactor
                 rwcatank.component_damage_cost = cacal.fc_cmd()
-                rwcatank.business_cost = cacal.FC_PROD_SHELL()
+                #rwcatank.business_cost = cacal.FC_PROD_SHELL()
+                rwcatank.business_cost = cacal.fc_prod_tank()
                 rwcatank.consequence = cacal.FC_total_shell()
                 rwcatank.consequencecategory = cacal.FC_Category(cacal.FC_total_shell())
+                #bổ sung 3 tham số đầu ra
+                rwcatank.damage_surrounding_equipment_cost=cacal.fc_affa_tank()
                 rwcatank.save()
             else:
-                rwcatank = models.RwCaTank(id=rwassessment, flow_rate_d1=cacal.W_n_Tank(1),
+                rwcatank = models.RwCaTank(id=rwassessment, hydraulic_water=cacal.k_h_water(),
+                                           hydraulic_fluid=cacal.k_h_prod(),
+                                           seepage_velocity=cacal.vel_s_prod(),
+                                           flow_rate_d1=cacal.W_n_Tank(1),
                                            flow_rate_d2=cacal.W_n_Tank(2),
                                            flow_rate_d3=cacal.W_n_Tank(3),
-                                           flow_rate_d4=cacal.W_n_Tank(4), leak_duration_d1=cacal.ld_tank(1),
+                                           flow_rate_d4=cacal.W_n_Tank(4),
+                                           leak_duration_d1=cacal.ld_tank(1),
                                            leak_duration_d2=cacal.ld_tank(2),
                                            leak_duration_d3=cacal.ld_tank(3), leak_duration_d4=cacal.ld_tank(4),
                                            release_volume_leak_d1=cacal.Bbl_leak_n(1),
@@ -779,8 +1204,8 @@ def calculateTank(proposalID):
                                            release_volume_leak_d3=cacal.Bbl_leak_n(3),
                                            release_volume_leak_d4=cacal.Bbl_leak_n(4),
                                            release_volume_rupture=cacal.Bbl_rupture_release(),
-                                           liquid_height=cacal.FLUID_HEIGHT,
-                                           volume_fluid=cacal.Bbl_total_shell(),
+                                           liquid_height=cacal.LHT_above(),
+                                           volume_fluid=cacal.Lvol_abouve(),
                                            time_leak_ground=cacal.ld_tank(4),
                                            volume_subsoil_leak_d1=cacal.Bbl_leak_release(),
                                            volume_subsoil_leak_d4=cacal.Bbl_rupture_release(),
@@ -799,9 +1224,11 @@ def calculateTank(proposalID):
                                            fc_environ=cacal.FC_environ_shell(),
                                            material_factor=rwinputca.productioncost,
                                            component_damage_cost=cacal.fc_cmd(),
-                                           business_cost=cacal.FC_PROD_SHELL(),
+                                           #business_cost=cacal.FC_PROD_SHELL(),
+                                           business_cost=cacal.fc_prod_tank(),
                                            consequence=cacal.FC_total_shell(),
-                                           consequencecategory=cacal.FC_Category(cacal.FC_total_shell()))
+                                           consequencecategory=cacal.FC_Category(cacal.FC_total_shell()),
+                                           damage_surrounding_equipment_cost=cacal.fc_affa_tank())
                 rwcatank.save()
             FC_TOTAL = cacal.FC_total_shell()
             FC_CATEGORY = cacal.FC_Category(cacal.FC_total_shell())
@@ -1064,7 +1491,7 @@ def ReCalculate(proposalID):
     try:
         rwAss = models.RwAssessment.objects.get(id=proposalID)
         component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
-        if component.componenttypeid_id == 8 or component.componenttypeid_id == 12 or component.componenttypeid_id == 14 or component.componenttypeid_id == 15:
+        if component.componenttypeid_id == 9 or component.componenttypeid_id == 12 or component.componenttypeid_id == 13 or component.componenttypeid_id == 15:
             isTank = 1
         else:
             isTank = 0

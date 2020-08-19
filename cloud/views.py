@@ -1,6 +1,12 @@
 import os
+from builtins import int
+from itertools import count
+
 from django.core.wsgi import get_wsgi_application
 from numpy.lib.function_base import vectorize
+from reportlab.platypus.para import paragraphEngine
+from scipy.io.arff.arffread import r_wcomattrval
+from sympy.functions.elementary.complexes import im
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'RbiCloud.settings'
 application = get_wsgi_application()
@@ -25,6 +31,9 @@ from cloud.process.RBI import fastCalulate as ReCalculate
 from django.db.models import Q
 from cloud.regularverification.regular import REGULAR
 import threading
+from cloud.regularverification import subscribe
+# import paho.mqtt.client as mqtt
+from cloud.regularverification import subscribe_thingsboard
 
 
 from django.views.decorators.csrf import csrf_protect
@@ -34,6 +43,10 @@ from cloud.tokens import gen_token
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
+from cloud.process.RBI import Postgresql as DAL_CAL
+from cloud.process.RBI import CA_Flammable
+from cloud.process.RBI import ToxicConsequenceArea
+from cloud.process.RBI import FinancialCOF
 from  django.contrib.auth import login
 import time
 from django.http import JsonResponse
@@ -73,199 +86,731 @@ def base_manufacture(request):
 ################## 404 Error ###########################
 def handler404(request):
     return render(request, '404/404.html', locals())
+
 ################ Inspection Plan #######################
-def InpsectionPlan(request, siteID,name='Plan Name',date='Plan Date'):
+def ListInpsectionPlan():
+    inspection = models.InspecPlan.objects.all()
+    try:
+        data=[]
+        for a in inspection:
+            obj = {}
+            obj["ID"] = a.id
+            obj["InspecPlanName"] = a.inspectionplanname
+            obj["InspecPlanDate"] = a.inspectionplandate
+            data.append(obj)
+    except Exception as e:
+        print(e)
+    return data
+def ListInspectionCoverage(planID):
+    inspection = models.InspecPlan.objects.get(id=planID)
+    inspecCover = models.InspectionCoverage.objects.filter(planid_id=planID)
+    data = []
+    for a in inspecCover:
+        obj = {}
+        obj["ID"] = planID
+        obj["InpsecName"] = inspection.inspectionplanname
+        obj["InspecDate"] = inspection.inspectionplandate
+        obj["NameEquipment"] = models.EquipmentMaster.objects.get(equipmentid=a.equipmentid_id).equipmentnumber
+        obj["NameComponent"] = models.ComponentMaster.objects.get(componentid=a.componentid_id).componentnumber
+        data.append(obj)
+    return data
+
+def InspectionPlanDetail(request,planID): #hàm chính
+    return 0
+def ListNormalProposalFofInpsection(siteID,facilityID,equimentID):
+    # site = models.Sites.objects.get(siteID=3)
+    data = []
+    tank = [8, 9, 12, 13, 14, 15]
+    datarw = []  # kiem tra id proposal co ton tai trong bang RwDamageMechanism
+    datapof = []  # kiem tra id  proposal co ton tai trong bang RwFullPof
+    componenttypeID = 0
+    rwdamAll = models.RwDamageMechanism.objects.all()
+    rwfullpofAll = models.RwFullPof.objects.all()
+    print("go select equip ListNormalProposalFofInpsection")
+    for a in rwdamAll:
+        array = a.id_dm_id
+        datarw.append(array)
+    for b in rwfullpofAll:
+        brray = b.id_id
+        datapof.append(brray)
+    try:
+        if facilityID:
+            faci = models.Facility.objects.filter(facilityid=facilityID)
+            for f in faci:
+                if equimentID:
+                    equip = models.EquipmentMaster.objects.filter(equipmentid=equimentID)
+                    print("go here")
+                else:
+                    equip = models.EquipmentMaster.objects.filter(facilityid_id=f.facilityid)
+                for e in equip:
+                    comp = models.ComponentMaster.objects.filter(equipmentid_id=e.equipmentid)
+                    equiptype = models.EquipmentType.objects.get(equipmenttypeid=e.equipmenttypeid_id)
+                    desi = models.DesignCode.objects.get(designcodeid=e.designcodeid_id)
+                    for c in comp:
+                        pros = models.RwAssessment.objects.filter(componentid_id=c.componentid)
+                        comptype = models.ComponentType.objects.get(componenttypeid=c.componenttypeid_id)
+                        for p in pros:
+                            componenttypeID = comptype.componenttypeid
+                            obj = {}
+                            rwequip = models.RwEquipment.objects.get(id_id=p.id)
+                            rwcomponent = models.RwComponent.objects.get(id_id=p.id)
+                            rwstream = models.RwStream.objects.get(id_id=p.id)
+                            rwmaterial = models.RwMaterial.objects.get(id_id=p.id)
+                            rwcoat = models.RwCoating.objects.get(id_id=p.id)
+                            obj['ID'] = p.id
+                            obj['ConponentName'] = c.componentname
+                            obj['ConponentNumber'] = c.componentnumber
+                            obj['EquipmentNumber'] = e.equipmentnumber
+                            obj['CommissionDate'] = e.commissiondate
+                            obj['Site'] = "SITE"
+                            obj['Facility'] = f.facilityname
+                            if (p.id in datapof):
+                                rwfullpof = models.RwFullPof.objects.get(id_id=p.id)
+                                obj['API1'] = rwfullpof.thinningap1
+                                obj['API2'] = rwfullpof.thinningap2
+                                obj['API3'] = rwfullpof.thinningap3
+                                obj['RLI'] = rwfullpof.rli
+                            else:
+                                obj['API1'] = "None"
+                                obj['API2'] = "None"
+                                obj['API3'] = "None"
+                                obj['RLI'] = "None"
+                            obj['AssessmentName'] = p.proposalname
+                            obj['AssessmentDate'] = p.assessmentdate
+                            obj['RiskAnalysisPeriod'] = p.riskanalysisperiod
+                            obj['EquipmentType'] = equiptype.equipmenttypename
+                            obj['ComponentType'] = comptype.componenttypename
+                            if (p.id in datarw):
+                                rwdam = models.RwDamageMechanism.objects.get(id_dm_id=p.id)
+                                obj['InspectionDueDate'] = rwdam.inspduedate
+                            else:
+                                obj['InspectionDueDate'] = "None"
+                            obj['DesignCode'] = desi.designcode
+                            # Equipment Properties
+                            obj['adminControlUpset'] = rwequip.adminupsetmanagement
+                            obj['ContainsDeadlegs'] = rwequip.containsdeadlegs
+                            obj['PresenceofSulphides'] = rwequip.presencesulphideso2
+                            obj['SteamedOut'] = rwequip.steamoutwaterflush
+                            obj['ThermalHistory'] = rwequip.thermalhistory
+                            obj['SystemManagementFactor'] = rwequip.managementfactor
+                            obj['PWHT'] = rwequip.pwht
+                            obj['PressurisationControlled'] = rwequip.pressurisationcontrolled
+                            obj['PresenceofSulphidesShutdow'] = rwequip.presencesulphideso2shutdown
+                            obj['OnlineMonitoring'] = rwequip.onlinemonitoring
+                            obj['minreqtemperaturepressurisation'] = rwequip.minreqtemperaturepressurisation
+                            obj['MFTF'] = rwequip.materialexposedtoclext
+                            obj['CylicOper'] = rwequip.cyclicoperation
+                            obj['LOM'] = rwequip.lineronlinemonitoring
+                            obj['Downtime'] = rwequip.downtimeprotectionused
+                            obj['EquOper'] = rwequip.yearlowestexptemp
+                            obj['EquipmentVolume'] = rwequip.volume
+                            obj['ExternalEnvironment'] = rwequip.interfacesoilwater
+                            obj['InterfaceSoilWater'] = rwequip.externalenvironment
+                            obj['HeatTraced'] = rwequip.heattraced
+                            obj['Highly'] = rwequip.highlydeadleginsp
+                            # Component
+                            obj['MinimumMeasuredThickness'] = rwcomponent.currentthickness
+                            obj['NominalThickness'] = rwcomponent.nominalthickness
+                            obj['NominalDiameter'] = rwcomponent.nominaldiameter
+                            obj['MinRequiredThickness'] = rwcomponent.minreqthickness
+                            obj['CurrentCorrosionRate'] = rwcomponent.currentcorrosionrate
+                            obj['PresenceCracks'] = rwcomponent.crackspresent
+                            obj['PreviousFailure'] = rwcomponent.previousfailures
+                            obj['DFDI'] = rwcomponent.damagefoundinspection
+                            obj['HFICI'] = rwcomponent.highlyinjectioninsp
+                            obj['PIMP'] = 0
+                            # obj['TrampElements'] = rwcomponent.trampelements
+                            obj['TrampElements'] = 0
+                            obj['DeltaFATT'] = rwcomponent.deltafatt
+                            obj['CylicLoadingConnectedwithin1525m'] = rwcomponent.cyclicloadingwitin15_25m
+                            obj['MaximumBrinnellHardnessofWeld'] = rwcomponent.brinnelhardness
+                            obj['NumberofFittingsonPipe'] = rwcomponent.numberpipefittings
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['PipeCondition'] = rwcomponent.pipecondition
+                            obj['VASD'] = rwcomponent.shakingdetected
+                            obj['shakingamount'] = rwcomponent.shakingamount
+                            obj['correctiveaction'] = rwcomponent.correctiveaction
+                            obj['branchdiameter'] = rwcomponent.branchdiameter
+                            obj['complexityprotrusion'] = rwcomponent.complexityprotrusion
+                            # Stream
+                            obj['maxoperatingtemperature'] = rwstream.maxoperatingtemperature
+                            obj['minoperatingtemperature'] = rwstream.minoperatingtemperature
+                            obj['minoperatingpressure'] = rwstream.minoperatingpressure
+                            obj['criticalexposuretemperature'] = rwstream.criticalexposuretemperature
+                            obj['aminesolution'] = rwstream.aminesolution
+                            obj['naohconcentration'] = rwstream.naohconcentration
+                            obj['h2sinwater'] = rwstream.h2sinwater
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['flowrate'] = rwstream.flowrate
+                            obj['waterph'] = rwstream.waterph
+                            obj['ToxicConstituents'] = rwstream.toxicconstituent
+                            obj['releasefluidpercenttoxic'] = rwstream.releasefluidpercenttoxic
+                            obj['PCH'] = rwstream.hydrogen
+                            obj['PHA'] = rwstream.hydrofluoric
+                            obj['exposuretoamine'] = rwstream.exposuretoamine
+                            obj['PresenceCyanides'] = rwstream.cyanide
+                            obj['h2spartialpressure'] = rwstream.h2spartialpressure
+                            obj['ESBC'] = rwstream.exposedtosulphur
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EnvironmentCH2S'] = rwstream.h2s
+                            obj['ECCAC'] = rwstream.caustic
+                            obj['co3concentration'] = rwstream.co3concentration
+                            obj['chloride'] = rwstream.chloride
+                            obj['APDO'] = rwstream.aqueousoperation
+                            obj['APDSD'] = rwstream.aqueousshutdown
+                            # Material
+                            obj['designtemperature'] = rwmaterial.designtemperature
+                            obj['allowablestress'] = rwcomponent.allowablestress  # Component
+                            obj['designpressure'] = rwmaterial.designpressure
+                            obj['temper'] = rwmaterial.temper
+                            obj['sulfurcontent'] = rwmaterial.sulfurcontent
+                            obj['sigmaphase'] = rwmaterial.sigmaphase
+                            obj['referencetemperature'] = rwmaterial.referencetemperature
+                            obj['NickelAlloy'] = rwmaterial.nickelbased
+                            obj['costfactor'] = rwmaterial.costfactor
+                            obj['heattreatment'] = rwmaterial.heattreatment
+                            obj['corrosionallowance'] = rwmaterial.corrosionallowance
+                            obj['Chromium'] = rwmaterial.chromemoreequal12
+                            obj['CoLAS'] = rwmaterial.carbonlowalloy
+                            obj['AusteniticSteel'] = rwmaterial.austenitic
+                            # Coating
+                            obj['InternalCoating'] = rwcoat.internalcoating
+                            obj['ExternalCoating'] = rwcoat.externalcoating
+                            obj['externalcoatingdate'] = rwcoat.externalcoatingdate
+                            obj['externalcoatingquality'] = rwcoat.externalcoatingquality
+                            obj['supportMaterial'] = rwcoat.supportconfignotallowcoatingmaint
+                            obj['InternalLining'] = rwcoat.internallining
+                            obj['internallinertype'] = rwcoat.internallinertype
+                            obj['internallinercondition'] = rwcoat.internallinercondition
+                            obj['internalcladding'] = rwcoat.internalcladding
+                            obj['claddingcorrosionrate'] = rwcoat.claddingcorrosionrate
+                            obj['externalinsulation'] = rwcoat.externalinsulation
+                            obj['externalinsulationtype'] = rwcoat.externalinsulationtype
+                            obj['insulationcondition'] = rwcoat.insulationcondition
+                            obj['insulationcontainschloride'] = rwcoat.insulationcontainschloride
+                            if not componenttypeID in tank:
+                                data.append(obj)
+        else:
+            faci = models.Facility.objects.filter(siteid_id=siteID)
+            for f in faci:
+                equip = models.EquipmentMaster.objects.filter(facilityid_id=f.facilityid)
+                for e in equip:
+                    comp = models.ComponentMaster.objects.filter(equipmentid_id=e.equipmentid)
+                    equiptype = models.EquipmentType.objects.get(equipmenttypeid=e.equipmenttypeid_id)
+                    desi = models.DesignCode.objects.get(designcodeid=e.designcodeid_id)
+                    for c in comp:
+                        pros = models.RwAssessment.objects.filter(componentid_id=c.componentid)
+                        comptype = models.ComponentType.objects.get(componenttypeid=c.componenttypeid_id)
+                        componenttypeID = comptype.componenttypeid
+                        for p in pros:
+                            obj = {}
+                            rwequip = models.RwEquipment.objects.get(id_id=p.id)
+                            rwcomponent = models.RwComponent.objects.get(id_id=p.id)
+                            rwstream = models.RwStream.objects.get(id_id=p.id)
+                            rwmaterial = models.RwMaterial.objects.get(id_id=p.id)
+                            rwcoat = models.RwCoating.objects.get(id_id=p.id)
+                            obj['ID'] = p.id
+                            obj['ConponentName'] = c.componentname
+                            obj['ConponentNumber'] = c.componentnumber
+                            obj['EquipmentNumber'] = e.equipmentnumber
+                            obj['CommissionDate'] = e.commissiondate
+                            obj['Site'] = "SITE"
+                            obj['Facility'] = f.facilityname
+                            if (p.id in datapof):
+                                rwfullpof = models.RwFullPof.objects.get(id_id=p.id)
+                                obj['API1'] = rwfullpof.thinningap1
+                                obj['API2'] = rwfullpof.thinningap2
+                                obj['API3'] = rwfullpof.thinningap3
+                                obj['RLI'] = rwfullpof.rli
+                            else:
+                                obj['API1'] = "None"
+                                obj['API2'] = "None"
+                                obj['API3'] = "None"
+                                obj['RLI'] = "None"
+                            obj['AssessmentName'] = p.proposalname
+                            obj['AssessmentDate'] = p.assessmentdate
+                            obj['RiskAnalysisPeriod'] = p.riskanalysisperiod
+                            obj['EquipmentType'] = equiptype.equipmenttypename
+                            obj['ComponentType'] = comptype.componenttypename
+                            if (p.id in datarw):
+                                rwdam = models.RwDamageMechanism.objects.get(id_dm_id=p.id)
+                                obj['InspectionDueDate'] = rwdam.inspduedate
+                            else:
+                                obj['InspectionDueDate'] = "None"
+                            obj['DesignCode'] = desi.designcode
+                            # Equipment Properties
+                            obj['adminControlUpset'] = rwequip.adminupsetmanagement
+                            obj['ContainsDeadlegs'] = rwequip.containsdeadlegs
+                            obj['PresenceofSulphides'] = rwequip.presencesulphideso2
+                            obj['SteamedOut'] = rwequip.steamoutwaterflush
+                            obj['ThermalHistory'] = rwequip.thermalhistory
+                            obj['SystemManagementFactor'] = rwequip.managementfactor
+                            obj['PWHT'] = rwequip.pwht
+                            obj['PressurisationControlled'] = rwequip.pressurisationcontrolled
+                            obj['PresenceofSulphidesShutdow'] = rwequip.presencesulphideso2shutdown
+                            obj['OnlineMonitoring'] = rwequip.onlinemonitoring
+                            obj['minreqtemperaturepressurisation'] = rwequip.minreqtemperaturepressurisation
+                            obj['MFTF'] = rwequip.materialexposedtoclext
+                            obj['CylicOper'] = rwequip.cyclicoperation
+                            obj['LOM'] = rwequip.lineronlinemonitoring
+                            obj['Downtime'] = rwequip.downtimeprotectionused
+                            obj['EquOper'] = rwequip.yearlowestexptemp
+                            obj['EquipmentVolume'] = rwequip.volume
+                            obj['ExternalEnvironment'] = rwequip.interfacesoilwater
+                            obj['InterfaceSoilWater'] = rwequip.externalenvironment
+                            obj['HeatTraced'] = rwequip.heattraced
+                            obj['Highly'] = rwequip.highlydeadleginsp
+                            # Component
+                            obj['MinimumMeasuredThickness'] = rwcomponent.currentthickness
+                            obj['NominalThickness'] = rwcomponent.nominalthickness
+                            obj['NominalDiameter'] = rwcomponent.nominaldiameter
+                            obj['MinRequiredThickness'] = rwcomponent.minreqthickness
+                            obj['CurrentCorrosionRate'] = rwcomponent.currentcorrosionrate
+                            obj['PresenceCracks'] = rwcomponent.crackspresent
+                            obj['PreviousFailure'] = rwcomponent.previousfailures
+                            obj['DFDI'] = rwcomponent.damagefoundinspection
+                            obj['HFICI'] = rwcomponent.highlyinjectioninsp
+                            obj['PIMP'] = 0
+                            # obj['TrampElements'] = rwcomponent.trampelements
+                            obj['TrampElements'] = 0
+                            obj['DeltaFATT'] = rwcomponent.deltafatt
+                            obj['CylicLoadingConnectedwithin1525m'] = rwcomponent.cyclicloadingwitin15_25m
+                            obj['MaximumBrinnellHardnessofWeld'] = rwcomponent.brinnelhardness
+                            obj['NumberofFittingsonPipe'] = rwcomponent.numberpipefittings
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['PipeCondition'] = rwcomponent.pipecondition
+                            obj['VASD'] = rwcomponent.shakingdetected
+                            obj['shakingamount'] = rwcomponent.shakingamount
+                            obj['correctiveaction'] = rwcomponent.correctiveaction
+                            obj['branchdiameter'] = rwcomponent.branchdiameter
+                            obj['complexityprotrusion'] = rwcomponent.complexityprotrusion
+                            # Stream
+                            obj['maxoperatingtemperature'] = rwstream.maxoperatingtemperature
+                            obj['minoperatingtemperature'] = rwstream.minoperatingtemperature
+                            obj['minoperatingpressure'] = rwstream.minoperatingpressure
+                            obj['criticalexposuretemperature'] = rwstream.criticalexposuretemperature
+                            obj['aminesolution'] = rwstream.aminesolution
+                            obj['naohconcentration'] = rwstream.naohconcentration
+                            obj['h2sinwater'] = rwstream.h2sinwater
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['flowrate'] = rwstream.flowrate
+                            obj['waterph'] = rwstream.waterph
+                            obj['ToxicConstituents'] = rwstream.toxicconstituent
+                            obj['releasefluidpercenttoxic'] = rwstream.releasefluidpercenttoxic
+                            obj['PCH'] = rwstream.hydrogen
+                            obj['PHA'] = rwstream.hydrofluoric
+                            obj['exposuretoamine'] = rwstream.exposuretoamine
+                            obj['PresenceCyanides'] = rwstream.cyanide
+                            obj['h2spartialpressure'] = rwstream.h2spartialpressure
+                            obj['ESBC'] = rwstream.exposedtosulphur
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EnvironmentCH2S'] = rwstream.h2s
+                            obj['ECCAC'] = rwstream.caustic
+                            obj['co3concentration'] = rwstream.co3concentration
+                            obj['chloride'] = rwstream.chloride
+                            obj['APDO'] = rwstream.aqueousoperation
+                            obj['APDSD'] = rwstream.aqueousshutdown
+                            # Material
+                            obj['designtemperature'] = rwmaterial.designtemperature
+                            obj['allowablestress'] = rwcomponent.allowablestress  # Component
+                            obj['designpressure'] = rwmaterial.designpressure
+                            obj['temper'] = rwmaterial.temper
+                            obj['sulfurcontent'] = rwmaterial.sulfurcontent
+                            obj['sigmaphase'] = rwmaterial.sigmaphase
+                            obj['referencetemperature'] = rwmaterial.referencetemperature
+                            obj['NickelAlloy'] = rwmaterial.nickelbased
+                            obj['costfactor'] = rwmaterial.costfactor
+                            obj['heattreatment'] = rwmaterial.heattreatment
+                            obj['corrosionallowance'] = rwmaterial.corrosionallowance
+                            obj['Chromium'] = rwmaterial.chromemoreequal12
+                            obj['CoLAS'] = rwmaterial.carbonlowalloy
+                            obj['AusteniticSteel'] = rwmaterial.austenitic
+                            # Coating
+                            obj['InternalCoating'] = rwcoat.internalcoating
+                            obj['ExternalCoating'] = rwcoat.externalcoating
+                            obj['externalcoatingdate'] = rwcoat.externalcoatingdate
+                            obj['externalcoatingquality'] = rwcoat.externalcoatingquality
+                            obj['supportMaterial'] = rwcoat.supportconfignotallowcoatingmaint
+                            obj['InternalLining'] = rwcoat.internallining
+                            obj['internallinertype'] = rwcoat.internallinertype
+                            obj['internallinercondition'] = rwcoat.internallinercondition
+                            obj['internalcladding'] = rwcoat.internalcladding
+                            obj['claddingcorrosionrate'] = rwcoat.claddingcorrosionrate
+                            obj['externalinsulation'] = rwcoat.externalinsulation
+                            obj['externalinsulationtype'] = rwcoat.externalinsulationtype
+                            obj['insulationcondition'] = rwcoat.insulationcondition
+                            obj['insulationcontainschloride'] = rwcoat.insulationcontainschloride
+                            if not componenttypeID in tank:
+                                data.append(obj)
+    except Exception as e:
+        print(e)
+    return data
+def ListTankProposalForInpsection(siteID,facilityID,equimentID):
+    dataTank = []
+    tank = [8, 9, 12, 13, 14, 15]
+    datarw = []  # kiem tra id proposal co ton tai trong bang RwDamageMechanism
+    datapof = []  # kiem tra id  proposal co ton tai trong bang RwFullPof
+    componenttypeID = 0
+    try:
+        if facilityID:
+            faci = models.Facility.objects.filter(facilityid=facilityID)
+            for f in faci:
+                if equimentID:
+                    equip = models.EquipmentMaster.objects.filter(facilityid_id=f.facilityid)
+                else:
+                    equip = models.EquipmentMaster.objects.filter(equipmentid=equimentID)
+                for e in equip:
+                    comp = models.ComponentMaster.objects.filter(equipmentid_id=e.equipmentid)
+                    equiptype = models.EquipmentType.objects.get(equipmenttypeid=e.equipmenttypeid_id)
+                    desi = models.DesignCode.objects.get(designcodeid=e.designcodeid_id)
+                    for c in comp:
+                        pros = models.RwAssessment.objects.filter(componentid_id=c.componentid)
+                        comptype = models.ComponentType.objects.get(componenttypeid=c.componenttypeid_id)
+                        componenttypeID = comptype.componenttypeid
+                        for p in pros:
+                            obj = {}
+                            rwequip = models.RwEquipment.objects.get(id_id=p.id)
+                            rwcomponent = models.RwComponent.objects.get(id_id=p.id)
+                            rwstream = models.RwStream.objects.get(id_id=p.id)
+                            rwmaterial = models.RwMaterial.objects.get(id_id=p.id)
+                            rwcoat = models.RwCoating.objects.get(id_id=p.id)
+                            obj['ID'] = p.id
+                            obj['ConponentName'] = c.componentname
+                            obj['ConponentNumber'] = c.componentnumber
+                            obj['EquipmentNumber'] = e.equipmentnumber
+                            obj['CommissionDate'] = e.commissiondate
+                            obj['Site'] = "SITE"
+                            obj['Facility'] = f.facilityname
+                            if (p.id in datapof):
+                                rwfullpof = models.RwFullPof.objects.get(id_id=p.id)
+                                obj['API1'] = rwfullpof.thinningap1
+                                obj['API2'] = rwfullpof.thinningap2
+                                obj['API3'] = rwfullpof.thinningap3
+                                obj['RLI'] = rwfullpof.rli
+                            else:
+                                obj['API1'] = "None"
+                                obj['API2'] = "None"
+                                obj['API3'] = "None"
+                                obj['RLI'] = "None"
+                            obj['AssessmentName'] = p.proposalname
+                            obj['AssessmentDate'] = p.assessmentdate
+                            obj['RiskAnalysisPeriod'] = p.riskanalysisperiod
+                            obj['EquipmentType'] = equiptype.equipmenttypename
+                            obj['ComponentType'] = comptype.componenttypename
+                            if (p.id in datarw):
+                                rwdam = models.RwDamageMechanism.objects.get(id_dm_id=p.id)
+                                obj['InspectionDueDate'] = rwdam.inspduedate
+                            else:
+                                obj['InspectionDueDate'] = "None"
+                            obj['DesignCode'] = desi.designcode
+                            # Equipment Properties
+                            obj['adminControlUpset'] = rwequip.adminupsetmanagement
+                            obj['ContainsDeadlegs'] = rwequip.containsdeadlegs
+                            obj['PresenceofSulphides'] = rwequip.presencesulphideso2
+                            obj['SteamedOut'] = rwequip.steamoutwaterflush
+                            obj['ThermalHistory'] = rwequip.thermalhistory
+                            obj['SystemManagementFactor'] = rwequip.managementfactor
+                            obj['PWHT'] = rwequip.pwht
+                            obj['PressurisationControlled'] = rwequip.pressurisationcontrolled
+                            obj['PresenceofSulphidesShutdow'] = rwequip.presencesulphideso2shutdown
+                            obj['OnlineMonitoring'] = rwequip.onlinemonitoring
+                            obj['minreqtemperaturepressurisation'] = rwequip.minreqtemperaturepressurisation
+                            obj['MFTF'] = rwequip.materialexposedtoclext
+                            obj['CylicOper'] = rwequip.cyclicoperation
+                            obj['LOM'] = rwequip.lineronlinemonitoring
+                            obj['Downtime'] = rwequip.downtimeprotectionused
+                            obj['EquOper'] = rwequip.yearlowestexptemp
+                            obj['EquipmentVolume'] = rwequip.volume
+                            obj['ExternalEnvironment'] = rwequip.interfacesoilwater
+                            obj['InterfaceSoilWater'] = rwequip.externalenvironment
+                            obj['HeatTraced'] = rwequip.heattraced
+                            obj['Highly'] = rwequip.highlydeadleginsp
+                            # Component
+                            obj['MinimumMeasuredThickness'] = rwcomponent.currentthickness
+                            obj['NominalThickness'] = rwcomponent.nominalthickness
+                            obj['NominalDiameter'] = rwcomponent.nominaldiameter
+                            obj['MinRequiredThickness'] = rwcomponent.minreqthickness
+                            obj['CurrentCorrosionRate'] = rwcomponent.currentcorrosionrate
+                            obj['PresenceCracks'] = rwcomponent.crackspresent
+                            obj['PreviousFailure'] = rwcomponent.previousfailures
+                            obj['DFDI'] = rwcomponent.damagefoundinspection
+                            obj['HFICI'] = rwcomponent.highlyinjectioninsp
+                            obj['PIMP'] = 0
+                            # obj['TrampElements'] = rwcomponent.trampelements
+                            obj['TrampElements'] = 0
+                            obj['DeltaFATT'] = rwcomponent.deltafatt
+                            obj['CylicLoadingConnectedwithin1525m'] = rwcomponent.cyclicloadingwitin15_25m
+                            obj['MaximumBrinnellHardnessofWeld'] = rwcomponent.brinnelhardness
+                            obj['NumberofFittingsonPipe'] = rwcomponent.numberpipefittings
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['PipeCondition'] = rwcomponent.pipecondition
+                            obj['VASD'] = rwcomponent.shakingdetected
+                            obj['shakingamount'] = rwcomponent.shakingamount
+                            obj['correctiveaction'] = rwcomponent.correctiveaction
+                            obj['branchdiameter'] = rwcomponent.branchdiameter
+                            obj['complexityprotrusion'] = rwcomponent.complexityprotrusion
+                            # Stream
+                            obj['maxoperatingtemperature'] = rwstream.maxoperatingtemperature
+                            obj['minoperatingtemperature'] = rwstream.minoperatingtemperature
+                            obj['minoperatingpressure'] = rwstream.minoperatingpressure
+                            obj['criticalexposuretemperature'] = rwstream.criticalexposuretemperature
+                            obj['aminesolution'] = rwstream.aminesolution
+                            obj['naohconcentration'] = rwstream.naohconcentration
+                            obj['h2sinwater'] = rwstream.h2sinwater
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['flowrate'] = rwstream.flowrate
+                            obj['waterph'] = rwstream.waterph
+                            obj['ToxicConstituents'] = rwstream.toxicconstituent
+                            obj['releasefluidpercenttoxic'] = rwstream.releasefluidpercenttoxic
+                            obj['PCH'] = rwstream.hydrogen
+                            obj['PHA'] = rwstream.hydrofluoric
+                            obj['exposuretoamine'] = rwstream.exposuretoamine
+                            obj['PresenceCyanides'] = rwstream.cyanide
+                            obj['h2spartialpressure'] = rwstream.h2spartialpressure
+                            obj['ESBC'] = rwstream.exposedtosulphur
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EnvironmentCH2S'] = rwstream.h2s
+                            obj['ECCAC'] = rwstream.caustic
+                            obj['co3concentration'] = rwstream.co3concentration
+                            obj['chloride'] = rwstream.chloride
+                            obj['APDO'] = rwstream.aqueousoperation
+                            obj['APDSD'] = rwstream.aqueousshutdown
+                            # Material
+                            obj['designtemperature'] = rwmaterial.designtemperature
+                            obj['allowablestress'] = rwcomponent.allowablestress  # Component
+                            obj['designpressure'] = rwmaterial.designpressure
+                            obj['temper'] = rwmaterial.temper
+                            obj['sulfurcontent'] = rwmaterial.sulfurcontent
+                            obj['sigmaphase'] = rwmaterial.sigmaphase
+                            obj['referencetemperature'] = rwmaterial.referencetemperature
+                            obj['NickelAlloy'] = rwmaterial.nickelbased
+                            obj['costfactor'] = rwmaterial.costfactor
+                            obj['heattreatment'] = rwmaterial.heattreatment
+                            obj['corrosionallowance'] = rwmaterial.corrosionallowance
+                            obj['Chromium'] = rwmaterial.chromemoreequal12
+                            obj['CoLAS'] = rwmaterial.carbonlowalloy
+                            obj['AusteniticSteel'] = rwmaterial.austenitic
+                            # Coating
+                            obj['InternalCoating'] = rwcoat.internalcoating
+                            obj['ExternalCoating'] = rwcoat.externalcoating
+                            obj['externalcoatingdate'] = rwcoat.externalcoatingdate
+                            obj['externalcoatingquality'] = rwcoat.externalcoatingquality
+                            obj['supportMaterial'] = rwcoat.supportconfignotallowcoatingmaint
+                            obj['InternalLining'] = rwcoat.internallining
+                            obj['internallinertype'] = rwcoat.internallinertype
+                            obj['internallinercondition'] = rwcoat.internallinercondition
+                            obj['internalcladding'] = rwcoat.internalcladding
+                            obj['claddingcorrosionrate'] = rwcoat.claddingcorrosionrate
+                            obj['externalinsulation'] = rwcoat.externalinsulation
+                            obj['externalinsulationtype'] = rwcoat.externalinsulationtype
+                            obj['insulationcondition'] = rwcoat.insulationcondition
+                            obj['insulationcontainschloride'] = rwcoat.insulationcontainschloride
+                            if not componenttypeID in tank:
+                                dataTank.append(obj)
+        else:
+            faci = models.Facility.objects.filter(siteid_id=siteID)
+            for f in faci:
+                equip = models.EquipmentMaster.objects.filter(facilityid_id=f.facilityid)
+                for e in equip:
+                    comp = models.ComponentMaster.objects.filter(equipmentid_id=e.equipmentid)
+                    equiptype = models.EquipmentType.objects.get(equipmenttypeid=e.equipmenttypeid_id)
+                    desi = models.DesignCode.objects.get(designcodeid=e.designcodeid_id)
+                    for c in comp:
+                        pros = models.RwAssessment.objects.filter(componentid_id=c.componentid)
+                        comptype = models.ComponentType.objects.get(componenttypeid=c.componenttypeid_id)
+                        componenttypeID = comptype.componenttypeid
+                        for p in pros:
+                            obj = {}
+                            rwequip = models.RwEquipment.objects.get(id_id=p.id)
+                            rwcomponent = models.RwComponent.objects.get(id_id=p.id)
+                            rwstream = models.RwStream.objects.get(id_id=p.id)
+                            rwmaterial = models.RwMaterial.objects.get(id_id=p.id)
+                            rwcoat = models.RwCoating.objects.get(id_id=p.id)
+                            obj['ID'] = p.id
+                            obj['ConponentName'] = c.componentname
+                            obj['ConponentNumber'] = c.componentnumber
+                            obj['EquipmentNumber'] = e.equipmentnumber
+                            obj['CommissionDate'] = e.commissiondate
+                            obj['Site'] = "SITE"
+                            obj['Facility'] = f.facilityname
+                            if (p.id in datapof):
+                                rwfullpof = models.RwFullPof.objects.get(id_id=p.id)
+                                obj['API1'] = rwfullpof.thinningap1
+                                obj['API2'] = rwfullpof.thinningap2
+                                obj['API3'] = rwfullpof.thinningap3
+                                obj['RLI'] = rwfullpof.rli
+                            else:
+                                obj['API1'] = "None"
+                                obj['API2'] = "None"
+                                obj['API3'] = "None"
+                                obj['RLI'] = "None"
+                            obj['AssessmentName'] = p.proposalname
+                            obj['AssessmentDate'] = p.assessmentdate
+                            obj['RiskAnalysisPeriod'] = p.riskanalysisperiod
+                            obj['EquipmentType'] = equiptype.equipmenttypename
+                            obj['ComponentType'] = comptype.componenttypename
+                            if (p.id in datarw):
+                                rwdam = models.RwDamageMechanism.objects.get(id_dm_id=p.id)
+                                obj['InspectionDueDate'] = rwdam.inspduedate
+                            else:
+                                obj['InspectionDueDate'] = "None"
+                            obj['DesignCode'] = desi.designcode
+                            # Equipment Properties
+                            obj['adminControlUpset'] = rwequip.adminupsetmanagement
+                            obj['ContainsDeadlegs'] = rwequip.containsdeadlegs
+                            obj['PresenceofSulphides'] = rwequip.presencesulphideso2
+                            obj['SteamedOut'] = rwequip.steamoutwaterflush
+                            obj['ThermalHistory'] = rwequip.thermalhistory
+                            obj['SystemManagementFactor'] = rwequip.managementfactor
+                            obj['PWHT'] = rwequip.pwht
+                            obj['PressurisationControlled'] = rwequip.pressurisationcontrolled
+                            obj['PresenceofSulphidesShutdow'] = rwequip.presencesulphideso2shutdown
+                            obj['OnlineMonitoring'] = rwequip.onlinemonitoring
+                            obj['minreqtemperaturepressurisation'] = rwequip.minreqtemperaturepressurisation
+                            obj['MFTF'] = rwequip.materialexposedtoclext
+                            obj['CylicOper'] = rwequip.cyclicoperation
+                            obj['LOM'] = rwequip.lineronlinemonitoring
+                            obj['Downtime'] = rwequip.downtimeprotectionused
+                            obj['EquOper'] = rwequip.yearlowestexptemp
+                            obj['EquipmentVolume'] = rwequip.volume
+                            obj['ExternalEnvironment'] = rwequip.interfacesoilwater
+                            obj['InterfaceSoilWater'] = rwequip.externalenvironment
+                            obj['HeatTraced'] = rwequip.heattraced
+                            obj['Highly'] = rwequip.highlydeadleginsp
+                            # Component
+                            obj['MinimumMeasuredThickness'] = rwcomponent.currentthickness
+                            obj['NominalThickness'] = rwcomponent.nominalthickness
+                            obj['NominalDiameter'] = rwcomponent.nominaldiameter
+                            obj['MinRequiredThickness'] = rwcomponent.minreqthickness
+                            obj['CurrentCorrosionRate'] = rwcomponent.currentcorrosionrate
+                            obj['PresenceCracks'] = rwcomponent.crackspresent
+                            obj['PreviousFailure'] = rwcomponent.previousfailures
+                            obj['DFDI'] = rwcomponent.damagefoundinspection
+                            obj['HFICI'] = rwcomponent.highlyinjectioninsp
+                            obj['PIMP'] = 0
+                            # obj['TrampElements'] = rwcomponent.trampelements
+                            obj['TrampElements'] = 0
+                            obj['DeltaFATT'] = rwcomponent.deltafatt
+                            obj['CylicLoadingConnectedwithin1525m'] = rwcomponent.cyclicloadingwitin15_25m
+                            obj['MaximumBrinnellHardnessofWeld'] = rwcomponent.brinnelhardness
+                            obj['NumberofFittingsonPipe'] = rwcomponent.numberpipefittings
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['JointTypeofBranch'] = rwcomponent.branchjointtype
+                            obj['PipeCondition'] = rwcomponent.pipecondition
+                            obj['VASD'] = rwcomponent.shakingdetected
+                            obj['shakingamount'] = rwcomponent.shakingamount
+                            obj['correctiveaction'] = rwcomponent.correctiveaction
+                            obj['branchdiameter'] = rwcomponent.branchdiameter
+                            obj['complexityprotrusion'] = rwcomponent.complexityprotrusion
+                            # Stream
+                            obj['maxoperatingtemperature'] = rwstream.maxoperatingtemperature
+                            obj['minoperatingtemperature'] = rwstream.minoperatingtemperature
+                            obj['minoperatingpressure'] = rwstream.minoperatingpressure
+                            obj['criticalexposuretemperature'] = rwstream.criticalexposuretemperature
+                            obj['aminesolution'] = rwstream.aminesolution
+                            obj['naohconcentration'] = rwstream.naohconcentration
+                            obj['h2sinwater'] = rwstream.h2sinwater
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['MEFMSCC'] = rwstream.materialexposedtoclint
+                            obj['flowrate'] = rwstream.flowrate
+                            obj['waterph'] = rwstream.waterph
+                            obj['ToxicConstituents'] = rwstream.toxicconstituent
+                            obj['releasefluidpercenttoxic'] = rwstream.releasefluidpercenttoxic
+                            obj['PCH'] = rwstream.hydrogen
+                            obj['PHA'] = rwstream.hydrofluoric
+                            obj['exposuretoamine'] = rwstream.exposuretoamine
+                            obj['PresenceCyanides'] = rwstream.cyanide
+                            obj['h2spartialpressure'] = rwstream.h2spartialpressure
+                            obj['ESBC'] = rwstream.exposedtosulphur
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EAGTA'] = rwstream.exposedtogasamine
+                            obj['EnvironmentCH2S'] = rwstream.h2s
+                            obj['ECCAC'] = rwstream.caustic
+                            obj['co3concentration'] = rwstream.co3concentration
+                            obj['chloride'] = rwstream.chloride
+                            obj['APDO'] = rwstream.aqueousoperation
+                            obj['APDSD'] = rwstream.aqueousshutdown
+                            # Material
+                            obj['designtemperature'] = rwmaterial.designtemperature
+                            obj['allowablestress'] = rwcomponent.allowablestress  # Component
+                            obj['designpressure'] = rwmaterial.designpressure
+                            obj['temper'] = rwmaterial.temper
+                            obj['sulfurcontent'] = rwmaterial.sulfurcontent
+                            obj['sigmaphase'] = rwmaterial.sigmaphase
+                            obj['referencetemperature'] = rwmaterial.referencetemperature
+                            obj['NickelAlloy'] = rwmaterial.nickelbased
+                            obj['costfactor'] = rwmaterial.costfactor
+                            obj['heattreatment'] = rwmaterial.heattreatment
+                            obj['corrosionallowance'] = rwmaterial.corrosionallowance
+                            obj['Chromium'] = rwmaterial.chromemoreequal12
+                            obj['CoLAS'] = rwmaterial.carbonlowalloy
+                            obj['AusteniticSteel'] = rwmaterial.austenitic
+                            # Coating
+                            obj['InternalCoating'] = rwcoat.internalcoating
+                            obj['ExternalCoating'] = rwcoat.externalcoating
+                            obj['externalcoatingdate'] = rwcoat.externalcoatingdate
+                            obj['externalcoatingquality'] = rwcoat.externalcoatingquality
+                            obj['supportMaterial'] = rwcoat.supportconfignotallowcoatingmaint
+                            obj['InternalLining'] = rwcoat.internallining
+                            obj['internallinertype'] = rwcoat.internallinertype
+                            obj['internallinercondition'] = rwcoat.internallinercondition
+                            obj['internalcladding'] = rwcoat.internalcladding
+                            obj['claddingcorrosionrate'] = rwcoat.claddingcorrosionrate
+                            obj['externalinsulation'] = rwcoat.externalinsulation
+                            obj['externalinsulationtype'] = rwcoat.externalinsulationtype
+                            obj['insulationcondition'] = rwcoat.insulationcondition
+                            obj['insulationcontainschloride'] = rwcoat.insulationcontainschloride
+                            if not componenttypeID in tank:
+                                dataTank.append(obj)
+    except Exception as e:
+        print(e)
+    return dataTank
+
+def MainInpsectionPlan(request, siteID,name="",date=""):
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),Q(Is_see=0)).count()
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
     inspection = models.InspecPlan.objects.all()
     inspecCover = models.InspectionCoverage.objects.all()
     try:
-        error = {}
-        data = []
-        for a in inspection:
-            if (a.inspectionplanname == name):
-                inspecCover = models.InspectionCoverage.objects.filter(planid_id=a.id)
-                for b in inspecCover:
-                    obj = {}
-                    equip = models.EquipmentMaster.objects.get(equipmentid=b.equipmentid_id)
-                    comp = models.ComponentMaster.objects.get(componentid=b.componentid_id)
-                    obj['InspectionPlanID'] = name
-                    obj['InspectionPlanDate'] = date
-                    obj['Equipment'] = equip.equipmentnumber
-                    obj['Component'] = comp.componentnumber
-                    data.append(obj)
-
-        if '_creat' in request.POST:
-            return redirect('createInspectionPlan', siteID=siteID)
-        if '_add' in request.POST:
-            if name =='Plan Name':
-                error['exist'] = "Please create/select an inspection plan before adding inspection coverage!"
-            else:
-                return redirect('addInspectionPlan', siteID=siteID,name=name,date=date,facilityID=0,equipID=0)
-        try:
-            if '_delete' in request.POST:
-                for a in inspection:
-                    if (request.POST.get('%d' % a.id)):
-                        a.delete()
-                return redirect('inspectionPlan',siteID=siteID)
-            if '_select' in request.POST:
-                for a in inspection:
-                    if (request.POST.get('%d' % a.id)):
-                        return redirect('inspectionPlan',siteID=siteID,name=a.inspectionplanname,date=a.inspectionplandate)
-        except Exception as e:
-            print(e)
-            raise Http404
+         listInpsec = ListInpsectionPlan()
+         listInpsecCoverage = []
+         error = {}
+         if '_select' in request.POST:
+             for a in inspection:
+                 if (request.POST.get('%d' % a.id)):
+                     return redirect('inspectionPlan', siteID=siteID, name=a.inspectionplanname,date=a.inspectionplandate)
+         if '_delete' in request.POST:
+             for a in inspection:
+                 if (request.POST.get('%d' % a.id)):
+                     a.delete()
+             return redirect('inspectionPlan',siteID=siteID)
+         for a in inspection:
+             if (a.inspectionplanname == name):
+                 listInpsecCoverage = ListInspectionCoverage(a.id)
+         if '_creat' in request.POST:
+             return redirect('createInspectionPlan', siteID=siteID)
+         if '_add' in request.POST:
+             if name =='':
+                 error['exist'] = "Please create/select an inspection plan before adding inspection coverage!"
+             else:
+                 return redirect('addInspectionPlan', siteID=siteID,name=name,date=date,facilityID=0,equipID=0)
     except Exception as e:
-        print(e)
-        raise Http404
+         print(e)
+         raise Http404
     return render(request, 'FacilityUI/inspection_plan/inspectionPlanNew.html',
                   {'page': 'inspectionPlan', 'siteID': siteID, 'count': count, 'info': request.session,'noti': noti, 'countnoti': countnoti,
-                   'name':name,'date':date,'error':error,'inspection':inspection,'data':data})
-def AdddInssepctionPlan(request,siteID,facilityID,equipID,name,date):
-    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
-                                          Q(Is_see=0)).count()
-    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
-    countnoti = noti.filter(state=0).count()
+                   'listInpsec':listInpsec,'listInpsecCoverage':listInpsecCoverage,'name':name,'date':date,'error':error})
 
-    site = models.Sites.objects.all()
-    faci = models.Facility.objects.all()
-    desi = models.DesignCode.objects.all()
-
-    equi = models.EquipmentMaster.objects.all()
-    equiptype = models.EquipmentType.objects.all()
-
-    comp = models.ComponentMaster.objects.all()
-    comptype = models.ComponentType.objects.all()
-    rwcomponent = models.RwComponent.objects.all()
-
-    rwstream = models.RwStream.objects.all()
-    rwmaterial = models.RwMaterial.objects.all()
-    rwcoat = models.RwCoating.objects.all()
-
-    rwfullpof = models.RwFullPof.objects.all()
-    rwfullfcof = models.RwFullFcof.objects.all()
-
-    pros =models.RwAssessment.objects.all()
-    rwdam = models.RwDamageMechanism.objects.all()
-    rwequip = models.RwEquipment.objects.all()
-
-    siteT = models.Sites.objects.get(siteid=siteID)
-    facility = models.Facility.objects.filter(siteid_id=siteID)
-    facilityT = models.Facility.objects.filter(facilityid=facilityID)
-
-    inspecplan = models.InspecPlan.objects.all()
-    imtype = models.IMType.objects.all()
-    imitem = models.IMItem.objects.all()
-
-    try:
-        dataF = []
-        error = {}
-        data = {}
-        datarw = []  # kiem tra id proposal co ton tai trong bang RwDamageMechanism
-        datapof = []  # kiem tra id  proposal co ton tai trong bang RwFullPof
-        for a in inspecplan:
-            if (a.inspectionplanname == name):
-                inspecCover = models.InspectionCoverage.objects.filter(planid_id=a.id)
-                for b in inspecCover:
-                    obj = {}
-                    array = b.componentid_id
-                    dataF.append(array)
-
-        for a in rwdam:
-            array=a.id_dm_id
-            datarw.append(array)
-        for b in rwfullpof:
-            brray= b.id_id
-            datapof.append(brray)
-
-        if request.POST.get('allSite'):
-            allSite = 1
-        else:
-            allSite = 0
-
-        if not facilityID:
-            allSite=1
-            facilityID=1
-            equipID=3
-            fac = models.Facility.objects.get(facilityid=facilityID)
-            facName = "All"
-            equip = models.EquipmentMaster.objects.filter(facilityid_id=facilityID)
-            equipName = "All"
-        else:
-            facilityID=facilityID
-            fac = models.Facility.objects.get(facilityid=facilityID)
-            facName=fac.facilityname
-            equip = models.EquipmentMaster.objects.filter(facilityid_id=facilityID)
-            equipName = models.EquipmentMaster.objects.get(equipmentid=equipID)
-
-        if '_ok' in request.POST:
-            for b in inspecplan:
-                inspectionCover = models.InspectionCoverage.objects.filter(planid_id=b.id)
-                if (b.inspectionplanname == name):
-                    if(inspectionCover.count() > 0):
-                        for c in inspectionCover:
-                            c.delete()
-            for a in pros:
-                if (request.POST.get('%d' % a.id)):
-                    print(a.id)
-                    for b in inspecplan:
-                        if (b.inspectionplanname == name):
-                            inspecCover = models.InspectionCoverage(planid_id=b.id, equipmentid_id=a.equipmentid_id,componentid_id=a.componentid_id)
-                            inspecCover.save()
-            return redirect('inspectionPlan',siteID=siteID,name=name,date=date)
-
-        if '_cancel' in request.POST:
-            return redirect('inspectionPlan',siteID=siteID,name='Plan Name',date='Plan Date')
-        if '_delete' in request.POST:
-            for a in site:
-                if (request.POST.get('%d' % a.siteid)):
-                    a.delete()
-            return redirect('addInspectionPlan', siteID=a.siteid,name=name,date=date,facilityID=0,equipID=0)
-        if '_select' in request.POST:
-            for a in site:
-                if (request.POST.get('%d' % a.siteid)):
-                    print("cuong")
-                    return redirect('addInspectionPlan', siteID=a.siteid, name=name, date=date,facilityID=1,equipID=3)
-        if '_selectFac' in request.POST:
-            for a in facility:
-                if (request.POST.get('%d' % a.facilityid)):
-                    return redirect('addInspectionPlan', siteID=siteID, name=name, date=date, facilityID=a.facilityid,equipID=3)
-        if '_selectEquip' in request.POST:
-            for a in equip:
-                if (request.POST.get('%d' % a.equipmentid)):
-                    return redirect('addInspectionPlan', siteID=siteID, name=name, date=date, facilityID=facilityID,equipID=a.equipmentid)
-    except Exception as e:
-        print(e)
-        raise Http404
-    return render(request,'FacilityUI/inspection_plan/addInspectionPlan.html',
-                  {'page':'addInspectionPlan','siteID':siteID, 'count': count, 'info': request.session,'noti': noti, 'countnoti': countnoti,
-                   'name':name,'date':date,'siteT':siteT,'desi':desi,'facility':facility,'facilityT':facilityT,'facName':facName,'equip':equip,
-                   'equipName':equipName,'allSite':allSite,'site':site,'faci':faci,'equi':equi,'equiptype':equiptype,'comp':comp,'comptype':comptype,
-                   'pros':pros,'rwdam':rwdam,'rwequip':rwequip,'rwcomponent':rwcomponent,'rwstream':rwstream,'rwmaterial':rwmaterial,'rwcoat':rwcoat,
-                   'rwfullpof':rwfullpof,'rwfullfcof':rwfullfcof,'facilityID':facilityID,'datarw':datarw,'datapof':datapof,'dataF':dataF,
-                   'imitem':imitem,'imtype':imtype})
-# def ajax_get_Site(request):
-#     data = []
-#     list = []
-#     try:
-#         if request.method == 'POST':
-#             print("get Site")
-#             sitename = request.POST.get('setSite')
-#             print(sitename)
-#             site = models.Sites.objects.get(sitename=sitename)
-#             data ={
-#                 'is_taken':models.Facility.objects.filter(siteid_id=site.siteid),
-#                 'es': models.Facility.objects.filter(siteid_id=site.siteid).exists()
-#             }
-#             for a in data['is_taken']:
-#                 list.append(a.facilityname)
-#             print(list)
-#             if data['es']:
-#                 data['error_message'] = 'A user with this username already exists.'
-#     except Exception as e:
-#         print(e)
-#     return JsonResponse(data)
 def CreateInspectionPlan(request, siteID):
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),Q(Is_see=0)).count()
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
@@ -276,10 +821,8 @@ def CreateInspectionPlan(request, siteID):
         site = models.Sites.objects.filter(siteid=siteID)
         if request.method == 'POST':
             data['inspectionplanname'] = request.POST.get('InspectionPlan')
-            print(data['inspectionplanname'])
             data['inspectiondate'] = request.POST.get('InspectionDate')
             countIns = models.InspecPlan.objects.filter(inspectionplanname= data['inspectionplanname']).count()
-            print(countIns)
             if countIns > 0:
                 error['exist'] = "This Inspection Plan Name already exists!"
             else:
@@ -292,6 +835,386 @@ def CreateInspectionPlan(request, siteID):
     return render(request, 'FacilityUI/inspection_plan/createInspectionPlan.html',
                   {'page': 'createInspectionPlan','site':site ,'error':error, 'data':data, 'siteID':siteID, 'count': count, 'info': request.session,
                    'noti': noti, 'countnoti': countnoti})
+
+def AdddInssepctionPlan(request,siteID,facilityID,equipID,name,date):
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+
+    site = models.Sites.objects.all()
+    facility = models.Facility.objects.filter(siteid_id=siteID)
+    pros = models.RwAssessment.objects.all()
+
+    siteT = models.Sites.objects.get(siteid=siteID)
+
+    inspecplan = models.InspecPlan.objects.all()
+    imtype = models.IMType.objects.all()
+    imitem = models.IMItem.objects.all()
+    try:
+        siteAll = []
+        typeInspec = []
+        dataF = []
+        listdata = {}
+        equipName = ''
+        dataSite = models.Sites.objects.all()
+        for a in dataSite:
+            siteobj = {}
+            siteobj['ID'] = a.siteid
+            siteobj['SiteName'] = a.sitename
+            siteobj['Create'] = a.create
+            siteAll.append(siteobj)
+        for a in inspecplan:
+            if (a.inspectionplanname == name):
+                inspecCover = models.InspectionCoverage.objects.filter(planid_id=a.id)
+                for b in inspecCover:
+                    obj = {}
+                    array = b.componentid_id
+                    dataF.append(array)
+        if request.POST.get('allSite'):
+            allSite = 1
+        else:
+            allSite = 0
+        if not facilityID:
+            allSite = 1
+            facName = "All"
+            equip = models.EquipmentMaster.objects.all()
+            equipName = "All"
+        else:
+            allSite=allSite
+            fac = models.Facility.objects.get(facilityid=facilityID)
+            facName = fac.facilityname
+            equip = models.EquipmentMaster.objects.filter(facilityid_id=facilityID)
+            if equipID:
+                equipName = models.EquipmentMaster.objects.get(equipmentid=equipID)
+            else:
+                equipName = models.EquipmentMaster.objects.all()
+        if allSite:
+            data = ListNormalProposalFofInpsection(siteID=siteID, facilityID=0, equimentID=0)
+            dataTank = ListTankProposalForInpsection(siteID=siteID, facilityID=0, equimentID=0)
+        else:
+            data = ListNormalProposalFofInpsection(siteID=siteID, facilityID=facilityID, equimentID=equipID)
+            dataTank = ListTankProposalForInpsection(siteID=siteID, facilityID=facilityID, equimentID=equipID)
+        if request.method == 'POST':
+            listdata['inspectiontype'] = request.POST.get('InspectionType')
+            listdata['visual'] = request.POST.get('Visual')
+            listdata['nagnetic'] = request.POST.get('Magnetic')
+            listdata['penetrant'] = request.POST.get('Penetrant')
+            listdata['radiography'] = request.POST.get('Radiography')
+            listdata['ultrasonic'] = request.POST.get('Ultrasonic')
+            listdata['eddycurrent'] = request.POST.get('EddyCurrent')
+            listdata['thermography'] = request.POST.get('Thermography')
+            listdata['acousticemission'] = request.POST.get('AcousticEmission')
+            listdata['metallurgical'] = request.POST.get('Metallurgical')
+            listdata['monitoring'] = request.POST.get('Monitoring')
+            if (listdata['inspectiontype'] == 'Intrusive'):
+                inspectiontype = 1
+            else:
+                inspectiontype = 2
+            listdata['cover1'] = request.POST.get('Cover1')
+            listdata['cover2'] = request.POST.get('Cover2')
+            listdata['cover3'] = request.POST.get('Cover3')
+            listdata['cover4'] = request.POST.get('Cover4')
+            listdata['cover5'] = request.POST.get('Cover5')
+            listdata['cover6'] = request.POST.get('Cover6')
+            listdata['cover7'] = request.POST.get('Cover7')
+            listdata['cover8'] = request.POST.get('Cover8')
+            listdata['cover9'] = request.POST.get('Cover9')
+            listdata['cover10'] = request.POST.get('Cover10')
+            obj1 = {}
+            obj2 = {}
+            obj3 = {}
+            obj4 = {}
+            obj5 = {}
+            obj5 = {}
+            obj6 = {}
+            obj7 = {}
+            obj8 = {}
+            obj9 = {}
+            obj10 = {}
+            listCover = [listdata['cover1'],listdata['cover2'],listdata['cover3'],listdata['cover4'],listdata['cover5'],listdata['cover6'],listdata['cover7'],listdata['cover8'],listdata['cover9'],listdata['cover10']]
+            if(listdata['visual'] == 'Endoscopy'):
+                obj1['IMItemID'] = 1
+                obj1['IMTypeID'] = 1
+            elif(listdata['visual'] == 'Hydrotesting'):
+                obj1['IMItemID'] = 1
+                obj1['IMTypeID'] = 2
+            elif (listdata['visual'] == 'Naked Eye'):
+                obj1['IMItemID'] = 1
+                obj1['IMTypeID'] = 3
+            elif (listdata['visual'] == 'Video'):
+                obj1['IMItemID'] = 1
+                obj1['IMTypeID'] = 4
+            elif (listdata['visual'] == 'Holiday'):
+                obj1['IMItemID'] = 1
+                obj1['IMTypeID'] = 37
+            if (listdata['nagnetic'] == 'Magnetic Fluorescent Inspection'):
+                obj2['IMItemID'] = 2
+                obj2['IMTypeID'] = 5
+            elif(listdata['nagnetic'] == 'Magnetic Flux Leakage'):
+                obj2['IMItemID'] = 2
+                obj2['IMTypeID'] = 6
+            elif(listdata['nagnetic'] == 'Magnetic Particle Inspection'):
+                obj2['IMItemID'] = 2
+                obj2['IMTypeID'] = 7
+            if (listdata['penetrant'] == 'Liquid Penetrant Inspection'):
+                obj3['IMItemID'] = 3
+                obj3['IMTypeID'] = 8
+            elif(listdata['penetrant'] == 'Liquid Penetrant Inspection'):
+                obj3['IMItemID'] = 3
+                obj3['IMTypeID'] = 9
+            if (listdata['radiography'] == 'Compton Scatter'):
+                obj4['IMItemID'] = 4
+                obj4['IMTypeID'] = 10
+            elif (listdata['radiography'] == 'Gamma Radiography'):
+                obj4['IMItemID'] = 4
+                obj4['IMTypeID'] = 11
+            elif (listdata['radiography'] == 'Real-time Radiography'):
+                obj4['IMItemID'] = 4
+                obj4['IMTypeID'] = 12
+            elif(listdata['radiography'] == 'X-Radiography'):
+                obj4['IMItemID'] = 4
+                obj4['IMTypeID'] = 13
+            if (listdata['ultrasonic'] == 'Angled Compression Wave'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 14
+            elif(listdata['ultrasonic'] == 'Angled Shear Wave'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 15
+            elif (listdata['ultrasonic'] == 'A-scan Thickness Survey'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 16
+            elif (listdata['ultrasonic'] == 'B-scan'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 17
+            elif (listdata['ultrasonic'] == 'Chime'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 18
+            elif (listdata['ultrasonic'] == 'C-scan'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 19
+            elif (listdata['ultrasonic'] == 'Digital Ultrasonic Thickness Gauge'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 20
+            elif (listdata['ultrasonic'] == 'Lorus'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 21
+            elif (listdata['ultrasonic'] == 'Surface Waves'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 22
+            elif (listdata['ultrasonic'] == 'Teletest'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 23
+            elif (listdata['ultrasonic'] == 'TOFD'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 24
+            elif (listdata['ultrasonic'] == 'Advanced Ultrasonic Backscatter Technique'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 38
+            elif(listdata['ultrasonic'] == 'Internal Rotational Inspection System'):
+                obj5['IMItemID'] = 5
+                obj5['IMTypeID'] = 39
+            if (listdata['eddycurrent'] == 'ACFM'):
+                obj6['IMItemID'] = 6
+                obj6['IMTypeID'] = 25
+            elif (listdata['eddycurrent'] == 'Low frequency'):
+                obj6['IMItemID'] = 6
+                obj6['IMTypeID'] = 26
+            elif (listdata['eddycurrent'] == 'Pulsed'):
+                obj6['IMItemID'] = 6
+                obj6['IMTypeID'] = 27
+            elif (listdata['eddycurrent'] == 'Remote field'):
+                obj6['IMItemID'] = 6
+                obj6['IMTypeID'] = 28
+            elif(listdata['eddycurrent']=='Standard (flat coil)'):
+                obj6['IMItemID'] = 6
+                obj6['IMTypeID'] = 29
+            if (listdata['thermography'] == 'Passive Thermography'):
+                obj7['IMItemID'] = 7
+                obj7['IMTypeID'] = 30
+            elif(listdata['thermography'] =='Transient Thermography'):
+                obj7['IMItemID'] = 7
+                obj7['IMTypeID'] = 31
+
+            if (listdata['acousticemission'] == 'Crack Detection'):
+                obj8['IMItemID'] = 8
+                obj8['IMTypeID'] = 32
+            elif(listdata['acousticemission'] == 'Leak Detection'):
+                obj8['IMItemID'] = 8
+                obj8['IMTypeID'] = 33
+            if (listdata['metallurgical'] == 'Hardness Surveys'):
+                obj9['IMItemID'] = 9
+                obj9['IMTypeID'] = 34
+            elif(listdata['metallurgical'] == 'Microstructure Replication'):
+                obj9['IMItemID'] = 9
+                obj9['IMTypeID'] = 35
+            if (listdata['monitoring'] == 'On-line Monitoring'):
+                obj10['IMItemID'] = 10
+                obj10['IMTypeID'] = 36
+            dataobj = [obj1,obj2,obj3,obj4,obj5,obj6,obj7,obj8,obj9,obj10]
+            dataobjCopy = []
+            i=0
+            for a in dataobj:
+                if a:
+                    a['Cover']= listCover[i]
+                    dataobjCopy.append(a)
+                i=i+1
+        if '_select' in request.POST:
+            for a in site:
+                if (request.POST.get('%d' % a.siteid)):
+                    return redirect('addInspectionPlan', siteID=a.siteid, name=name, date=date, facilityID=0, equipID=0)
+        if '_selectFac' in request.POST:
+            for a in facility:
+                if (request.POST.get('%d' % a.facilityid)):
+                    return redirect('addInspectionPlan', siteID=siteID, name=name, date=date, facilityID=a.facilityid,equipID=0)
+        if '_selectEquip' in request.POST:
+            for a in equip:
+                if (request.POST.get('%d' % a.equipmentid)):
+                    return redirect('addInspectionPlan', siteID=siteID, name=name, date=date, facilityID=facilityID,equipID=a.equipmentid)
+        if '_cancel' in request.POST:
+            return redirect('inspectionPlan', siteID=siteID, name=name, date=date)
+        if '_ok' in request.POST:
+            for b in inspecplan:
+                inspectionCover = models.InspectionCoverage.objects.filter(planid_id=b.id)
+                if (b.inspectionplanname == name):
+                    if (inspectionCover.count() > 0):
+                        for c in inspectionCover:
+                            c.delete()
+                            inspectionCoverDT = models.InspectionCoverageDetail.objects.filter(coverageid_id=c.id)
+                            inspectDeTech = models.InspectionTechnique.objects.filter(coverageid_id=c.id)
+                            for f in inspectDeTech:
+                                f.delete()
+                            for d in inspectionCoverDT:
+                                d.delete()
+            dataprosal = []
+            for a in pros:
+                if (request.POST.get('%d' % a.id)):
+                    for b in inspecplan:
+                        if (b.inspectionplanname == name):
+                            inspecCover = models.InspectionCoverage(planid_id=b.id, equipmentid_id=a.equipmentid_id,componentid_id=a.componentid_id)
+                            inspecCover.save()
+                    dataprosal.append(a)
+            inspectionCover = models.InspectionCoverage.objects.filter(planid_id=GetIdInpsecPlan(name))
+            for d in inspectionCover:
+                for f in dataobjCopy:
+                    inspDetailTech = models.InspectionTechnique(coverageid_id=d.id,imitemid_id=f['IMItemID'],imtypeid_id=f['IMTypeID'],inspectiontype=inspectiontype,coverage=f['Cover'])
+                    inspDetailTech.save()
+                for u in dataprosal:
+                    rwdama = models.RwDamageMechanism.objects.filter(id_dm_id=u.id)
+                    for c in rwdama:
+                        equip = models.RwAssessment.objects.get(id=u.id).equipmentid_id
+                        comp = models.RwAssessment.objects.get(id=u.id).componentid_id
+                        if ((d.equipmentid_id == equip) and (d.componentid_id==comp)):
+                            dmitem = models.DMItems.objects.get(dmitemid=c.dmitemid_id)
+                            inSpecCoverDT = models.InspectionCoverageDetail(coverageid_id=d.id, dmitemid_id=dmitem.dmitemid,inspectiondate=date)
+                            inSpecCoverDT.save()
+            return redirect('damageMechanism', planID=GetIdInpsecPlan(name),siteID=siteID)
+    except Exception as e:
+        print(e)
+    return render(request, 'FacilityUI/inspection_plan/addInspectionPlan.html',
+                  {'page': 'addInspectionPlan', 'siteID': siteID, 'count': count, 'info': request.session, 'noti': noti,
+                   'countnoti': countnoti,'allSite':allSite,'siteAll':siteAll,'siteT':siteT,'allSite':allSite,'facName':facName,'facility':facility,
+                   'equipName':equipName,'equip':equip,'data':data,'dataTank':dataTank,'dataF':dataF,'imtype':imtype,'imitem':imitem,'name':name,'date':date})
+
+def DamamgeMechanism(request,planID,siteID):
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    inspecCover = models.InspectionCoverage.objects.filter(planid_id=planID)
+    inspecPlan = models.InspecPlan.objects.get(id=planID)
+    listDMItem = [8,9,61,57,67,34,32,66,69,60,72,62,70,73]
+    dataSumary = []
+    try:
+        if(inspecCover.count()==1):
+            inspecCover1 = models.InspectionCoverage.objects.get(planid_id=planID)
+            inspecCoverDetail = models.InspectionCoverageDetail.objects.filter(coverageid_id=inspecCover1.id)
+            inspecTech = models.InspectionTechnique.objects.filter(coverageid_id=inspecCover1.id)
+            for b in inspecCoverDetail:
+                listSub = ""
+                obj = {}
+                obj['InspectionDate'] = models.InspecPlan.objects.get(id=planID).inspectionplandate
+                obj['CoverageID'] = inspecCover1.id
+                obj['CoverageDetailID'] = b.id
+                obj['DMITemID'] = b.dmitemid_id
+                obj['ID'] = b.id
+                obj['DMITemID'] = models.DMItems.objects.get(dmitemid=b.dmitemid_id).dmdescription
+                obj['EquipmentName'] = models.EquipmentMaster.objects.get(
+                    equipmentid=inspecCover1.equipmentid_id).equipmentnumber
+                obj['ComponenttName'] = models.ComponentMaster.objects.get(
+                    componentid=inspecCover1.componentid_id).componentnumber
+                if b.dmitemid_id in listDMItem:
+                    inspecDmRule = models.InspectionDMRule.objects.filter(dmitemid_id=b.dmitemid_id)
+                    for f in inspecDmRule:
+                        for c in inspecTech:
+                            if ((f.imitemid_id == c.imitemid_id) and (f.imtypeid_id == c.imtypeid_id)):
+                                obj1 = {}
+                                if c.inspectiontype == 1:
+                                    obj1['Type'] = "Intrusive"
+                                else:
+                                    obj1['Type'] = "Non-Intrusive"
+                                obj1['Coverage'] = c.coverage
+                                obj1['IMITemID'] = models.IMItem.objects.get(imitemid=c.imitemid_id).imdescription
+                                obj1['IMTypeID'] = models.IMType.objects.get(imtypeid=c.imtypeid_id).imtypename
+                                listSub = listSub+ obj1['Type']+"-"+obj1['IMITemID']+"-"+obj1['IMTypeID']+"-"+str(obj1['Coverage'])+"%"+";"
+                obj['Summary'] = listSub
+                dataSumary.append(obj)
+        else:
+            for a in inspecCover:
+                inspecCoverDetail2 = models.InspectionCoverageDetail.objects.filter(coverageid_id=a.id)
+                inspecTech = models.InspectionTechnique.objects.filter(coverageid_id=a.id)
+                for b in inspecCoverDetail2:
+                    listSub = ""
+                    obj = {}
+                    obj['InspectionDate'] = models.InspecPlan.objects.get(id=planID).inspectionplandate
+                    obj['CoverageID'] = a.id
+                    obj['CoverageDetailID'] = b.id
+                    obj['DMITemID'] = b.dmitemid_id
+                    obj['ID'] = b.id
+                    obj['DMITemName'] = models.DMItems.objects.get(dmitemid=b.dmitemid_id).dmdescription
+                    obj['EquipmentName'] = models.EquipmentMaster.objects.get(
+                        equipmentid=a.equipmentid_id).equipmentnumber
+                    obj['ComponenttName'] = models.ComponentMaster.objects.get(
+                        componentid=a.componentid_id).componentnumber
+                    if b.dmitemid_id in listDMItem:
+                        inspecDmRule = models.InspectionDMRule.objects.filter(dmitemid_id=b.dmitemid_id)
+                        for f in inspecDmRule:
+                            for c in inspecTech:
+                                if ((f.imitemid_id == c.imitemid_id) and (f.imtypeid_id == c.imtypeid_id)):
+                                    obj1 = {}
+                                    if c.inspectiontype == 1:
+                                        obj1['Type'] = "Intrusive"
+                                    else:
+                                        obj1['Type'] = "Non-Intrusive"
+                                    obj1['Coverage'] = c.coverage
+                                    obj1['IMITemID'] = models.IMItem.objects.get(imitemid=c.imitemid_id).imdescription
+                                    obj1['IMTypeID'] = models.IMType.objects.get(imtypeid=c.imtypeid_id).imtypename
+                                    listSub = listSub + obj1['Type'] + "-" + obj1['IMITemID'] + "-" + obj1[
+                                        'IMTypeID'] + "-" + str(obj1['Coverage']) + "%" + ";"
+                    obj['Summary'] = listSub
+                    dataSumary.append(obj)
+        if '_ok' in request.POST:
+            print("test ok")
+            for a in dataSumary:
+                if (request.POST.get('%d' % a['CoverageDetailID'])):
+                    print("test save")
+                    print(request.POST.get('EEF'+str(a['CoverageDetailID'])))
+                    inspectionCoverDetail = models.InspectionCoverageDetail(id=a['ID'],coverageid_id=a['CoverageID'],dmitemid_id=a['DMITemID'],
+                        inspsummary=a['Summary'],effcode=request.POST.get('EEF'+str(a['CoverageDetailID'])),inspectiondate=a['InspectionDate'],carriedoutdate=a['InspectionDate'],iscarriedout=0)
+                    inspectionCoverDetail.save()
+            return redirect('inspectionPlan', siteID=siteID, name=inspecPlan.inspectionplanname,
+                                    date=inspecPlan.inspectionplandate)
+    except Exception as e:
+        print(e)
+        print("error in DamamgeMechanism")
+    return render(request, 'FacilityUI/inspection_plan/damageMechanism.html', {'page':'DamageMechanism','siteID':siteID,'count':count,'noti':noti,'countnoti':countnoti,
+                                                                               'dataSumary':dataSumary})
+
+def GetIdInpsecPlan(name):
+    inspecplan = models.InspecPlan.objects.all()
+    for b in inspecplan:
+        if (b.inspectionplanname == name):
+            return b.id
 ################ Business UI Control ###################
 def ListFacilities(request, siteID):
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email), Q(Is_see=0)).count()
@@ -309,7 +1232,6 @@ def ListFacilities(request, siteID):
             dataF['ManagementFactor'] = a.managementfactor
             dataF['RiskTarget'] = risTarget.risktarget_fc
             risk.append(dataF)
-
         pagiFaci = Paginator(risk, 25)
         pageFaci = request.GET.get('page',1)
         try:
@@ -436,14 +1358,23 @@ def CorrisionRate(request,proposalID):
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
                                           Q(Is_see=0)).count()
 
-    list = []
-    dataF = {}
-    rwAss = models.RwAssessment.objects.get(id=proposalID)
-    componentID = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
-    dataF = models.CorrosionRateTank.objects.filter(id_id = proposalID)
-    for a in dataF:
-        list.append(a)
     try:
+        list = []
+        dataF = {}
+        rwAss = models.RwAssessment.objects.get(id=proposalID)
+        component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        if component.componenttypeid_id == 12 or component.componenttypeid_id == 15:
+            isBottom = 1
+        else:
+            isBottom = 0
+        if component.componenttypeid_id == 9 or component.componenttypeid_id == 13:
+            isShell = 1
+        else:
+            isShell = 0
+        componentID = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        dataF = models.CorrosionRateTank.objects.filter(id_id=proposalID)
+        for a in dataF:
+            list.append(a)
         error = {}
         data = {}
         rwAss = models.RwAssessment.objects.get(id=proposalID)
@@ -500,7 +1431,8 @@ def CorrisionRate(request,proposalID):
         raise Http404
     return render(request, 'FacilityUI/risk_summary/proposalCorrisionRate.html',
                   {'page': 'corrsionRate', 'proposalID': proposalID, 'componentID':rwAss.componentid_id, 'info': request.session, 'noti': noti,
-                   'countnoti': countnoti, 'count': count,'list':list,'dataF':dataF})
+                   'countnoti': countnoti, 'count': count,'list':list,'dataF':dataF,'isTank': isBottom,
+                                                                   'isShell': isShell})
 
 def CaculateCorrision(request,proposalID):
     return render(request,'FacilityUI/risk_summary/CaculateCorrision.html',
@@ -777,7 +1709,8 @@ def NewComponent(request, equipmentID):
         componentType = models.ComponentType.objects.all()
         apicomponentType = models.ApiComponentType.objects.all()
         prdType = models.PRDType.objects.all()
-        tankapi = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 36, 38, 39]
+        # tankapi = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 36, 38, 39]
+        tankapi = [36, 38, 39]
         other = []
         for a in apicomponentType:
             if a.apicomponenttypeid not in tankapi:
@@ -877,10 +1810,14 @@ def ListProposal(request, componentID):
             else:
                 obj1['fc'] = 0
             if dm.count() != 0:
+                print("dm count")
                 obj1['duedate'] = dm[0].inspduedate.date().strftime('%Y-%m-%d')
+                obj1['lastinsp'] = dm[0].lastinspdate.date().strftime('%Y-%m-%d')
             else:
-                obj1['duedate'] = (a.assessmentdate.date() + relativedelta(years=15)).strftime('%Y-%m-%d')
-                obj1['lastinsp'] = equip.commissiondate.date().strftime('%Y-%m-%d')
+                print("go here")
+                # obj1['duedate'] = (a.assessmentdate.date() + relativedelta(years=15)).strftime('%Y-%m-%d')
+                obj1['duedate'] = (a.assessmentdate.date() + relativedelta(years=16)).strftime('%Y-%m-%d')#cuong sua
+                obj1['lastinsp'] = equip.commissiondate.date().strftime('%Y-%m-%d')#cuong them vao
             obj1['risk'] = round(obj1['df'] * obj1['gff'] * obj1['fms'] * obj1['fc'], 2)
             data.append(obj1)
         pagidata = Paginator(data,25)
@@ -897,7 +1834,7 @@ def ListProposal(request, componentID):
             istank = 1
         else:
             istank = 0
-        if comp.componenttypeid_id == 8 or comp.componenttypeid_id == 14:
+        if comp.componenttypeid_id == 9 or comp.componenttypeid_id == 13:
             isshell = 1
         else:
             isshell = 0
@@ -913,9 +1850,12 @@ def ListProposal(request, componentID):
             elif '_edit' in request.POST:
                 for a in rwass:
                     if request.POST.get('%d' %a.id):
-                        if istank:
+                        if istank: #tuansua
                             print("tank")
                             return redirect('tankEdit', proposalID= a.id)
+                        elif isshell:
+                            print("tank")
+                            return redirect('tankEdit', proposalID=a.id)
                         else:
                             print("nottank")
                             return redirect('prosalEdit', proposalID= a.id)
@@ -923,11 +1863,27 @@ def ListProposal(request, componentID):
                 try:
                     if api.apicomponenttypename=='TANKBOTTOM':
                         return redirect('tankNew' , componentID=componentID)
+                    elif isshell:
+                        return redirect('tankNew', componentID=componentID)
                     else:
                         return redirect('proposalNew', componentID=componentID)
                 except Exception as e:
                     print(e)
                     raise Http404
+            elif '_newscada' in request.POST and request.FILES['myexcelFile']:
+                print("newscada")
+                try:
+                    for a in rwass:
+                        if request.POST.get('%d' %a.id):
+                            print(a.id)
+                            myfile = request.FILES['myexcelFile']
+                            fs = FileSystemStorage()
+                            filename = fs.save(myfile.name, myfile)
+                            uploaded_file_url = fs.url(filename)
+                            url_file = settings.BASE_DIR.replace('\\', '//') + str(uploaded_file_url).replace('/', '//').replace('%20', ' ')
+                            ExcelImport.ImportSCADA(url_file,a.id)
+                except Exception as e:
+                    print(e)
             else:
                 for a in rwass:
                     if request.POST.get('%d' %a.id):
@@ -939,17 +1895,18 @@ def ListProposal(request, componentID):
     return render(request, 'FacilityUI/proposal/proposalListDisplay.html', {'page':'listProposal','obj':obj, 'istank': istank, 'isshell':isshell,
                                                                             'componentID':componentID,
                                                                             'equipmentID':comp.equipmentid_id,'comp':comp,'equip':equip,'faci':faci,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+
 def NewProposal(request, componentID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
                                           Q(Is_see=0)).count()
-    print("NewProposal")
     try:
         Fluid = ["Acid", "AlCl3", "C1-C2", "C13-C16", "C17-C25", "C25+", "C3-C4", "C5", "C6-C8", "C9-C12", "CO", "DEE",
              "EE", "EEA", "EG", "EO", "H2", "H2S", "HCl", "HF", "Methanol", "Nitric Acid", "NO2", "Phosgene", "PO",
-             "Pyrophoric", "Steam", "Styrene", "TDI", "Water"]
-        print("newproposal not tank")
+             "Pyrophoric", "Steam", "Styrene", "TDI", "Water","Caustic", "Aromatics","Ammonia","Chlorine"]
+        ToxicFluid = ["H2S", "HF Acid", "CO", "HCl", "Nitric Acid", "AlCl3", "NO2", "Phosgene", "TDI", "PO", "EE",
+                      "EO", "Pyrophoric", "Ammonia", "Chlorine"]
         comp = models.ComponentMaster.objects.get(componentid= componentID)
         target = models.FacilityRiskTarget.objects.get(facilityid= models.EquipmentMaster.objects.get(equipmentid= comp.equipmentid_id).facilityid_id)
         datafaci = models.Facility.objects.get(facilityid= models.EquipmentMaster.objects.get(equipmentid= comp.equipmentid_id).facilityid_id)
@@ -1319,20 +2276,40 @@ def NewProposal(request, componentID):
             else:
                 materialExposedFluid = 0
             # CA
-            data['APIFluid'] = request.POST.get('APIFluid')
+            data['ModelFluid'] = request.POST.get('APIFluid')
             data['MassInventory'] = request.POST.get('MassInventory')
-            data['Systerm'] = request.POST.get('Systerm')
+            data['ToxicFluid'] = request.POST.get('ToxicFluid')
+            data['ToxicFluidPercent'] = request.POST.get('ToxicFluidPercent')
+            data['PhaseStorage'] = request.POST.get('phaseOfFluid')
+            data['LiquidLevel'] = request.POST.get('LiquidLevel')
             data['MassComponent'] = request.POST.get('MassComponent')
             data['EquipmentCost'] = request.POST.get('EquipmentCost')
-            data['MittigationSysterm'] = request.POST.get('MittigationSysterm')
+            data['MittigationSystem'] = request.POST.get('MittigationSystem')
             data['ProductionCost'] = request.POST.get('ProductionCost')
-            data['ToxicPercent'] = request.POST.get('ToxicPercent')
             data['InjureCost'] = request.POST.get('InjureCost')
             data['ReleaseDuration'] = request.POST.get('ReleaseDuration')
             data['EnvironmentCost'] = request.POST.get('EnvironmentCost')
             data['PersonDensity'] = request.POST.get('PersonDensity')
-            data['DetectionType'] = request.POST.get('DetectionType')
-            data['IsulationType'] = request.POST.get('IsulationType')
+            data['ProcessUnit'] = request.POST.get('ProcessUnit')
+            data['OutageMulti'] = request.POST.get('OutageMulti')
+            if request.POST.get(
+                    'DetectionType') == "Intrumentation designed specifically to detect material losses by changes in operating conditions (i.e loss of pressure or flow) in the system":
+                detectiontype = 'A'
+            elif request.POST.get(
+                    'DetectionType') == "Suitably located detectors to determine when the material is present outside the pressure-containing envelope":
+                detectiontype = 'B'
+            else:
+                detectiontype = 'C'
+            data['DetectionType'] = detectiontype
+            if request.POST.get(
+                    'IsolationType') == "Isolation or shutdown systerms activated directly from process instrumentation or detectors, with no operator intervention":
+                isolationtype = 'A'
+            elif request.POST.get(
+                    'IsolationType') == "Isolation or shutdown systems activated by operators in the control room or other suitable locations remote from the leak":
+                isolationtype = 'B'
+            else:
+                isolationtype = 'C'
+            data['IsolationType'] = isolationtype
             rwassessment = models.RwAssessment(equipmentid_id=comp.equipmentid_id, componentid_id=comp.componentid, assessmentdate=data['assessmentdate'],
                                         riskanalysisperiod=data['riskperiod'], isequipmentlinked= comp.isequipmentlinked,assessmentmethod = data['assessmentmethod'],
                                         proposalname=data['assessmentname'])
@@ -1384,7 +2361,8 @@ def NewProposal(request, componentID):
                                        naohconcentration=data['NaOHConcentration'],
                                        releasefluidpercenttoxic=float(data['ReleasePercentToxic']),
                                        waterph=float(data['PHWater']), h2spartialpressure=float(data['OpHydroPressure']),
-                                       flowrate=float(data['flowrate']))
+                                       flowrate=float(data['flowrate']), liquidlevel= float(data['LiquidLevel']),
+                                       storagephase = data['PhaseStorage'])
             rwstream.save()
             rwexcor = models.RwExtcorTemperature(id=rwassessment, minus12tominus8=data['OP1'], minus8toplus6=data['OP2'],
                                           plus6toplus32=data['OP3'], plus32toplus71=data['OP4'],
@@ -1421,24 +2399,30 @@ def NewProposal(request, componentID):
                                     costfactor=data['materialCostFactor'],
                                     yieldstrength=data['yieldstrength'],tensilestrength= data['tensilestrength'])
             rwmaterial.save()
-            rwinputca = models.RwInputCaLevel1(id=rwassessment, api_fluid=data['APIFluid'], system=data['Systerm'],
-                                        release_duration=data['ReleaseDuration'], detection_type=data['DetectionType'],
-                                        isulation_type=data['IsulationType'],
-                                        mitigation_system=data['MittigationSysterm'],
-                                        equipment_cost=data['EquipmentCost'], injure_cost=data['InjureCost'],
-                                        evironment_cost=data['EnvironmentCost'], toxic_percent=data['ToxicPercent'],
-                                        personal_density=data['PersonDensity'],
-                                        material_cost=data['materialCostFactor'],
-                                        production_cost=data['ProductionCost'], mass_inventory=data['MassInventory'],
-                                        mass_component=data['MassComponent'],
-                                        stored_pressure=float(data['minOP']) * 6.895, stored_temp=data['minOT'])
+            rwinputca = models.RwInputCaLevel1(id=rwassessment,
+                                               release_duration=data['ReleaseDuration'],
+                                               detection_type=data['DetectionType'],
+                                               isulation_type=data['IsolationType'],
+                                               mitigation_system=data['MittigationSystem'],
+                                               equipment_cost=data['EquipmentCost'], injure_cost=data['InjureCost'],
+                                               evironment_cost=data['EnvironmentCost'],
+                                               personal_density=data['PersonDensity'],
+                                               material_cost=data['materialCostFactor'],
+                                               production_cost=data['ProductionCost'],
+                                               mass_inventory=data['MassInventory'],
+                                               mass_component=data['MassComponent'],
+                                               stored_pressure=float(data['minOP']) * 6.895, stored_temp=data['minOT'],
+                                               model_fluid=data['ModelFluid'], toxic_fluid=data['ToxicFluid'],
+                                               toxic_percent=float(data['ToxicFluidPercent']),
+                                               process_unit=float(data['ProcessUnit']),
+                                               outage_multiplier=float(data['OutageMulti']))
             rwinputca.save()
             ReCalculate.ReCalculate(rwassessment.id)
             return redirect('damgeFactor', proposalID= rwassessment.id)
     except Exception as e:
         print(e)
         raise Http404
-    return render(request, 'FacilityUI/proposal/proposalNormalNew.html',{'page':'newProposal','api':Fluid, 'componentID':componentID, 'equipmentID':comp.equipmentid_id,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+    return render(request, 'FacilityUI/proposal/proposalNormalNew.html',{'page':'newProposal','api':Fluid, 'componentID':componentID, 'equipmentID':comp.equipmentid_id,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count,'toxicfluid':ToxicFluid})
 def NewTank(request, componentID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -1634,6 +2618,7 @@ def NewTank(request, componentID):
             data['minOP'] = request.POST.get('MinOP')
             data['H2Spressure'] = request.POST.get('OHPP')
             data['criticalTemp'] = request.POST.get('CET')
+            data['flowrate'] = request.POST.get('FlowRate')
             data['OP1'] = request.POST.get('Operating1')
             data['OP2'] = request.POST.get('Operating2')
             data['OP3'] = request.POST.get('Operating3')
@@ -1808,6 +2793,8 @@ def NewTank(request, componentID):
                 apiFluid = "C13-C16"
             elif str(data['fluid']) == "Fuel Oil" or str(data['fluid']) == "Crude Oil":
                 apiFluid = "C17-C25"
+            elif str(data['fluid']) =="Water":
+                apiFluid = "Water"
             else:
                 apiFluid = "C25+"
             rwassessment = models.RwAssessment(equipmentid_id=comp.equipmentid_id, componentid_id=comp.componentid, assessmentdate=data['assessmentdate'],
@@ -1868,7 +2855,7 @@ def NewTank(request, componentID):
                                 aqueousshutdown=aqueosShut, cyanide=cyanidesPresence, hydrofluoric=presentHF,
                                 caustic=environtCaustic, hydrogen=processContainHydro,
                                 materialexposedtoclint=materialChlorineIntern,
-                                exposedtosulphur=exposedSulfur)
+                                exposedtosulphur=exposedSulfur,flowrate=float(data['flowrate']))
             rwstream.save()
             rwexcor = models.RwExtcorTemperature(id=rwassessment, minus12tominus8=data['OP1'], minus8toplus6=data['OP2'],
                                           plus6toplus32=data['OP3'], plus32toplus71=data['OP4'],
@@ -1928,6 +2915,8 @@ def EditProposal(request, proposalID):
         Fluid = ["Acid", "AlCl3", "C1-C2", "C13-C16", "C17-C25", "C25+", "C3-C4", "C5", "C6-C8", "C9-C12", "CO", "DEE",
                  "EE", "EEA", "EG", "EO", "H2", "H2S", "HCl", "HF", "Methanol", "Nitric Acid", "NO2", "Phosgene", "PO",
                  "Pyrophoric", "Steam", "Styrene", "TDI", "Water"]
+        ToxicFluid = ["H2S", "HF Acid", "CO", "HCl", "Nitric Acid", "AlCl3", "NO2", "Phosgene", "TDI", "PO", "EE",
+                      "EO", "Pyrophoric", "Ammonia", "Chlorine"]
         rwassessment = models.RwAssessment.objects.get(id= proposalID)
         rwequipment = models.RwEquipment.objects.get(id= proposalID)
         rwcomponent = models.RwComponent.objects.get(id= proposalID)
@@ -2087,6 +3076,8 @@ def EditProposal(request, proposalID):
             data['deltafatt'] = request.POST.get('DeltaFATT')
             data['weldjointeff'] = request.POST.get('WeldJointEff')
             data['structuralthickness']= request.POST.get('StructuralThickness')
+            data['compvolume'] = request.POST.get('CompVolume')
+            data['allowStress'] = request.POST.get('AllowableStress')
             if request.POST.get('DFDI'):
                 damageDuringInsp = 1
             else:
@@ -2152,7 +3143,7 @@ def EditProposal(request, proposalID):
             data['minDesignTemp'] = request.POST.get('MinDesignTemp')
             data['designPressure'] = request.POST.get('DesignPressure')
             data['tempRef'] = request.POST.get('ReferenceTemperature')
-            data['allowStress'] = request.POST.get('ASAT')
+            # data['allowStress'] = request.POST.get('ASAT')
             data['BrittleFacture'] = request.POST.get('BFGT')
             data['CA'] = request.POST.get('CorrosionAllowance')
             data['sigmaPhase'] = request.POST.get('SigmaPhase')
@@ -2322,17 +3313,39 @@ def EditProposal(request, proposalID):
             data['APIFluid'] = request.POST.get('APIFluid')
             data['MassInventory'] = request.POST.get('MassInventory')
             data['Systerm'] = request.POST.get('Systerm')
+            data['ToxicFluid'] = request.POST.get('ToxicFluid')
+            data['ToxicFluidPercent'] = request.POST.get('ToxicFluidPercent')
+            data['PhaseStorage'] = request.POST.get('phaseOfFluid')
+            data['LiquidLevel'] = request.POST.get('LiquidLevel')
             data['MassComponent'] = request.POST.get('MassComponent')
             data['EquipmentCost'] = request.POST.get('EquipmentCost')
-            data['MittigationSysterm'] = request.POST.get('MittigationSysterm')
+            data['MittigationSystem'] = request.POST.get('MittigationSystem')
             data['ProductionCost'] = request.POST.get('ProductionCost')
             data['ToxicPercent'] = request.POST.get('ToxicPercent')
             data['InjureCost'] = request.POST.get('InjureCost')
             data['ReleaseDuration'] = request.POST.get('ReleaseDuration')
             data['EnvironmentCost'] = request.POST.get('EnvironmentCost')
             data['PersonDensity'] = request.POST.get('PersonDensity')
-            data['DetectionType'] = request.POST.get('DetectionType')
-            data['IsulationType'] = request.POST.get('IsulationType')
+            data['ProcessUnit'] = request.POST.get('ProcessUnit')
+            data['OutageMulti'] = request.POST.get('OutageMulti')
+            if request.POST.get(
+                    'DetectionType') == "Intrumentation designed specifically to detect material losses by changes in operating conditions (i.e loss of pressure or flow) in the system":
+                detectiontype = 'A'
+            elif request.POST.get(
+                    'DetectionType') == "Suitably located detectors to determine when the material is present outside the pressure-containing envelope":
+                detectiontype = 'B'
+            else:
+                detectiontype = 'C'
+            data['DetectionType'] = detectiontype
+            if request.POST.get(
+                    'IsolationType') == "Isolation or shutdown systerms activated directly from process instrumentation or detectors, with no operator intervention":
+                isolationtype = 'A'
+            elif request.POST.get(
+                    'IsolationType') == "Isolation or shutdown systems activated by operators in the control room or other suitable locations remote from the leak":
+                isolationtype = 'B'
+            else:
+                isolationtype = 'C'
+            data['IsolationType'] = isolationtype
 
             rwassessment.assessmentdate=data['assessmentdate']
             rwassessment.proposalname=data['assessmentname']
@@ -2395,6 +3408,7 @@ def EditProposal(request, proposalID):
             rwcomponent.equipmentcircuitshock=equipmentorCircuit
             #rwcomponent.trampelements=TrampElement
             rwcomponent.brittlefracturethickness = data['BrittleFacture']
+            rwcomponent.componentvolume = data['compvolume']
             rwcomponent.save()
 
             rwstream.aminesolution=data['AminSolution']
@@ -2422,6 +3436,8 @@ def EditProposal(request, proposalID):
             rwstream.releasefluidpercenttoxic=float(data['ReleasePercentToxic'])
             rwstream.waterph=float(data['PHWater'])
             rwstream.h2spartialpressure=float(data['OpHydroPressure'])
+            rwstream.storagephase = data['PhaseStorage']
+            rwstream.liquidlevel = float(data['LiquidLevel'])
             rwstream.save()
 
             rwexcor.minus12tominus8=data['OP1']
@@ -2480,8 +3496,8 @@ def EditProposal(request, proposalID):
             rwinputca.system=data['Systerm']
             rwinputca.release_duration=data['ReleaseDuration']
             rwinputca.detection_type=data['DetectionType']
-            rwinputca.isulation_type=data['IsulationType']
-            rwinputca.mitigation_system=data['MittigationSysterm']
+            rwinputca.isulation_type=data['IsolationType']
+            rwinputca.mitigation_system=data['MittigationSystem']
             rwinputca.equipment_cost=data['EquipmentCost']
             rwinputca.injure_cost=data['InjureCost']
             rwinputca.evironment_cost=data['EnvironmentCost']
@@ -2493,6 +3509,10 @@ def EditProposal(request, proposalID):
             rwinputca.mass_component=data['MassComponent']
             rwinputca.stored_pressure=float(data['minOP']) * 6.895
             rwinputca.stored_temp=data['minOT']
+            rwinputca.toxic_fluid = data['ToxicFluid']
+            rwinputca.toxic_percent = data['ToxicFluidPercent']
+            rwinputca.process_unit =data['ProcessUnit']
+            rwinputca.outage_multiplier = data['OutageMulti']
             rwinputca.save()
 
             #Customize code here
@@ -2506,7 +3526,7 @@ def EditProposal(request, proposalID):
                                                                            'rwCoat':rwcoat, 'rwMaterial':rwmaterial, 'rwInputCa':rwinputca,
                                                                            'assDate':assDate, 'extDate':extDate,
                                                                            'componentID': rwassessment.componentid_id,
-                                                                           'equipmentID': rwassessment.equipmentid_id,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+                                                                           'equipmentID': rwassessment.equipmentid_id,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count,'toxicfluid':ToxicFluid})
 def EditTank(request, proposalID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -2532,7 +3552,7 @@ def EditTank(request, proposalID):
         datafaci = models.Facility.objects.get(facilityid= eq.facilityid_id)
         data={}
         isshell = False
-        if comp.componenttypeid_id == 8 or comp.componenttypeid_id == 14:
+        if comp.componenttypeid_id == 9 or comp.componenttypeid_id == 13:#tuansua
             isshell = True
         if request.method =='POST':
             # Data Assessment
@@ -2717,6 +3737,7 @@ def EditTank(request, proposalID):
             data['minOP'] = request.POST.get('MinOP')
             data['H2Spressure'] = request.POST.get('OHPP')
             data['criticalTemp'] = request.POST.get('CET')
+            data['flowrate'] = request.POST.get('FlowRate')
             data['OP1'] = request.POST.get('Operating1')
             data['OP2'] = request.POST.get('Operating2')
             data['OP3'] = request.POST.get('Operating3')
@@ -2951,6 +3972,7 @@ def EditTank(request, proposalID):
             rwcomponent.cetgreaterorequal = cet
             rwcomponent.cyclicservice = cyclicservice
             rwcomponent.equipmentcircuitshock = equipmentorCircuit
+            rwcomponent.minstructuralthickness = minstruc
             rwcomponent.save()
             # print("6")
             rwstream.maxoperatingtemperature=data['maxOT']
@@ -2959,6 +3981,7 @@ def EditTank(request, proposalID):
             rwstream.minoperatingpressure=data['minOP']
             rwstream.h2spartialpressure=data['H2Spressure']
             rwstream.criticalexposuretemperature=data['criticalTemp']
+            rwstream.flowrate = data['flowrate']
             rwstream.tankfluidname=data['fluid']
             rwstream.fluidheight=data['fluidHeight']
             rwstream.fluidleavedikepercent=data['fluidLeaveDike']
@@ -3154,6 +4177,10 @@ def FullyDamageFactor(request, proposalID):
         data['pofap1category'] = df.pofap1category
         data['pofap2category'] = df.pofap2category
         data['pofap3category'] = df.pofap3category
+        if '_show1' in request.POST:
+            return redirect('thining', proposalID=proposalID)
+        if '_show2' in request.POST:
+            return redirect('governing', proposalID=proposalID)
         if request.method == 'POST':
             df.thinningtype = request.POST.get('thinningType')
             df.save()
@@ -3164,7 +4191,19 @@ def FullyDamageFactor(request, proposalID):
         raise Http404
     return render(request, 'FacilityUI/risk_summary/dfFull.html', {'page':'damageFactor', 'obj':data, 'assess': rwAss, 'isTank': isTank,
                                                                    'isShell': isShell, 'proposalID':proposalID,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
-def FullyConsequence(request, proposalID):
+def ShowThining(request,proposalID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    return render(request, 'FacilityUI/risk_summary/showThining.html',{'page':'thining','info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+def ShowGoverning(request,proposalID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    return render(request, 'FacilityUI/risk_summary/showGoverning.html',{'page':'governing','info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+def FullyConsequence(request, proposalID): #Finance cof
     data = {}
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -3173,11 +4212,12 @@ def FullyConsequence(request, proposalID):
     try:
         rwAss = models.RwAssessment.objects.get(id=proposalID)
         component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        rwstream = models.RwStream.objects.get(id=proposalID)
         if component.componenttypeid_id == 12 or component.componenttypeid_id == 15:
             isBottom = 1
         else:
             isBottom = 0
-        if component.componenttypeid_id == 8 or component.componenttypeid_id == 14:
+        if component.componenttypeid_id == 9 or component.componenttypeid_id == 13:
             isShell = 1
         else:
             isShell = 0
@@ -3210,9 +4250,14 @@ def FullyConsequence(request, proposalID):
             data['business_cost'] = roundData.roundMoney(bottomConsequences.business_cost)
             data['consequence'] = roundData.roundMoney(bottomConsequences.consequence)
             data['consequencecategory'] = bottomConsequences.consequencecategory
-            return render(request, 'FacilityUI/risk_summary/fullyBottomConsequence.html', {'page':'fullyConse', 'data': data, 'proposalID':proposalID, 'ass':rwAss,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+            return render(request, 'FacilityUI/risk_summary/fullyBottomConsequence.html', {'page':'fullyConse', 'data': data, 'proposalID':proposalID, 'ass':rwAss,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count,'isTank': isBottom,
+                                                                   'isShell': isShell})
         elif isShell:
             shellConsequences = models.RwCaTank.objects.get(id=proposalID)
+            rwfullcoftank = models.RWFullCofTank.objects.filter(id=proposalID)
+            data['hydraulic_water'] = roundData.roundFC(shellConsequences.hydraulic_water)  # tuansua
+            data['hydraulic_fluid'] = roundData.roundFC(shellConsequences.hydraulic_fluid)  # tuansua
+            data['seepage_velocity'] = roundData.roundFC(shellConsequences.seepage_velocity)  # tuansua
             data['flow_rate_d1'] = roundData.roundFC(shellConsequences.flow_rate_d1)
             data['flow_rate_d2'] = roundData.roundFC(shellConsequences.flow_rate_d2)
             data['flow_rate_d3'] = roundData.roundFC(shellConsequences.flow_rate_d3)
@@ -3226,6 +4271,8 @@ def FullyConsequence(request, proposalID):
             data['release_volume_leak_d3'] = roundData.roundFC(shellConsequences.release_volume_leak_d3)
             data['release_volume_leak_d4'] = roundData.roundFC(shellConsequences.release_volume_leak_d4)
             data['release_volume_rupture'] = roundData.roundFC(shellConsequences.release_volume_rupture)
+            data['liquid_height'] = roundData.roundFC(shellConsequences.liquid_height)
+            data['volume_fluid'] = roundData.roundFC(shellConsequences.volume_fluid)
             data['time_leak_ground'] = roundData.roundFC(shellConsequences.time_leak_ground)
             data['volume_subsoil_leak_d1'] = roundData.roundFC(shellConsequences.volume_subsoil_leak_d1)
             data['volume_subsoil_leak_d4'] = roundData.roundFC(shellConsequences.volume_subsoil_leak_d4)
@@ -3242,55 +4289,450 @@ def FullyConsequence(request, proposalID):
             data['business_cost'] = roundData.roundMoney(shellConsequences.business_cost)
             data['consequence'] = roundData.roundMoney(shellConsequences.consequence)
             data['consequencecategory'] = shellConsequences.consequencecategory
-            return render(request, 'FacilityUI/risk_summary/fullyShellConsequence.html', {'page':'fullyConse' , 'data': data, 'proposalID':proposalID, 'ass':rwAss,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+            # tuansua
+            data['material_factor'] = shellConsequences.material_factor
+            data['barrel_dike_leak'] = roundData.roundFC(shellConsequences.barrel_dike_leak)
+            data['barrel_onsite_leak'] = roundData.roundFC(shellConsequences.barrel_onsite_leak)
+            data['barrel_offsite_leak'] = roundData.roundFC(shellConsequences.barrel_offsite_leak)
+            data['barrel_water_leak'] = roundData.roundFC(shellConsequences.barrel_water_leak)
+            data['fc_environ_leak'] = roundData.roundFC(shellConsequences.fc_environ_leak)
+            #bổ sung hiển thị 5 giá trị đầu vào và 3 kết quả đầu ra
+            if rwfullcoftank.count() ==0:
+                data['equip_cost'] = 0
+                data['equip_outage_multiplier'] = 0
+                data['prod_cost'] = 0
+                data['pop_dens'] = 0
+                data['inj_cost'] = 0
+            else:
+                rwfullcoftank = models.RWFullCofTank.objects.get(id=proposalID)
+                data['equip_cost'] = rwfullcoftank.equipcost
+                data['equip_outage_multiplier'] = rwfullcoftank.equipoutagemultiplier
+                data['prod_cost'] = rwfullcoftank.prodcost
+                data['pop_dens'] = rwfullcoftank.popdens
+                data['inj_cost'] = rwfullcoftank.injcost
+            #bo sung 5 tham số đầu vào
+            if '_calculate' in request.POST:
+                if request.method == 'POST':
+                    data['equip_cost']  = request.POST.get('EquipCost')
+                    data['equip_outage_multiplier']  = request.POST.get('EquipOutageMultiplier')
+                    data['prod_cost']  = request.POST.get('ProdCost')
+                    data['pop_dens']  = request.POST.get('PopDens')
+                    data['inj_cost'] = request.POST.get('InjCost')
+                    rwfullcoftank = models.RWFullCofTank(id=rwAss,equipcost=data['equip_cost'],prodcost=data['prod_cost'],equipoutagemultiplier=data['equip_outage_multiplier'],
+                                                         popdens=data['pop_dens'],injcost=data['inj_cost'])
+                    rwfullcoftank.save()
+                    ReCalculate.ReCalculate(proposalID)
+            return render(request, 'FacilityUI/risk_summary/fullyShellConsequence.html', {'page':'fullyConse' , 'data': data, 'proposalID':proposalID, 'ass':rwAss,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count,'isTank': isBottom,
+                                                                   'isShell': isShell})
         else:
-            ca = models.RwCaLevel1.objects.get(id= proposalID)
-            inputCa = models.RwInputCaLevel1.objects.get(id= proposalID)
+            material = models.RwMaterial.objects.get(id=proposalID)
+            rwholezize = models.RwFullCoFHoleSize.objects.get(id=proposalID)
+            ca = models.RwCaLevel1.objects.get(id=proposalID)
+            inputCa = models.RwInputCaLevel1.objects.get(id=proposalID)
+            data['model_fluid'] = inputCa.api_fluid
+            data['toxic_fluid'] = inputCa.toxic_fluid
+            data['material_cost'] = material.costfactor
+            data['phase_fluid_storage'] = rwstream.storagephase
+            data['toxic_fluid_percentage'] = inputCa.toxic_percent
+            data['api_com_type'] = models.ApiComponentType.objects.get(
+                apicomponenttypeid=component.apicomponenttypeid).apicomponenttypename
             data['production_cost'] = roundData.roundMoney(inputCa.production_cost)
             data['equipment_cost'] = roundData.roundMoney(inputCa.equipment_cost)
             data['personal_density'] = inputCa.personal_density
             data['evironment_cost'] = roundData.roundMoney(inputCa.evironment_cost)
             data['ca_cmd'] = roundData.roundFC(ca.ca_cmd)
             data['ca_inj_flame'] = roundData.roundFC(ca.ca_inj_flame)
-            data['fc_cmd'] = roundData.roundMoney(ca.fc_cmd)
-            data['fc_affa'] = roundData.roundMoney(ca.fc_affa)
-            data['fc_prod'] = roundData.roundMoney(ca.fc_prod)
-            data['fc_inj'] = roundData.roundMoney(ca.fc_inj)
-            data['fc_envi'] = roundData.roundMoney(ca.fc_envi)
-            data['fc_total'] = roundData.roundMoney(ca.fc_total)
-            data['fcof_category'] = ca.fcof_category
-            return render(request, 'FacilityUI/risk_summary/fullyNormalConsequence.html', {'page':'fullyConse', 'data': data, 'proposalID':proposalID, 'ass':rwAss,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
-    except:
+            data['gff_small'] = rwholezize.gff_small
+            data['gff_medium'] = rwholezize.gff_medium
+            data['gff_large'] = rwholezize.gff_large
+            data['gff_rupture'] = rwholezize.gff_rupture
+            data['MATERIAL_COST'] = material.costfactor
+            caflammable = CA_Flammable.CA_Flammable(data['toxic_fluid'], data['phase_fluid_storage'],
+                                                    inputCa.mitigation_system, proposalID,
+                                                    rwstream.minoperatingtemperature + 273,
+                                                    data['api_com_type'], data['toxic_fluid_percentage'])
+            catoxic = ToxicConsequenceArea.CA_Toxic(proposalID, inputCa.toxic_fluid, caflammable.ReleasePhase(),
+                                                    data['toxic_fluid_percentage'], data['api_com_type'])
+            data['CA_cmd'] = caflammable.CA_Flam_Cmd()
+            data['CA_inj'] = max(caflammable.CA_Flam_inj(),catoxic.CA_toxic_inj(),catoxic.NoneCA_leck())
+            fullcof = FinancialCOF.FinancialCOF(proposalID,data['model_fluid'],data['toxic_fluid'],data['toxic_fluid_percentage'],data['api_com_type'],data['MATERIAL_COST'],data['CA_cmd'],data['CA_inj'])
+            data['Damage_outage_small'] = fullcof.outage_cmd_n(1)
+            data['Damage_outage_medium'] = fullcof.outage_cmd_n(2)
+            data['Damage_outage_large'] = fullcof.outage_cmd_n(3)
+            data['Damage_outage_rupture'] = fullcof.outage_cmd_n(4)
+            data['Equiment_cost_small'] = fullcof.HoleCost(1)
+            data['Equiment_cost_medium'] = fullcof.HoleCost(2)
+            data['Equiment_cost_large'] = fullcof.HoleCost(3)
+            data['Equiment_cost_rupture'] = fullcof.HoleCost(4)
+            data['FC_cmd'] = roundData.roundFC(fullcof.FC_cmd())
+            data['FC_affa'] = roundData.roundFC(fullcof.FC_affa())
+            data['outage_affa'] = roundData.roundFC(fullcof.Outage_affa())
+            data['FC_prod'] = roundData.roundFC(fullcof.FC_prod())
+            data['FC_inj'] = roundData.roundFC(fullcof.FC_inj())
+            data['FC_env'] = roundData.roundFC(fullcof.FC_environ())
+            data['outage_cmd'] = roundData.roundFC(fullcof.outage_cmd())
+            data['fc_total'] = roundData.roundFC(fullcof.FC_total())
+            data['fcof_category'] = fullcof.FC_Category()
+            return render(request, 'FacilityUI/risk_summary/fullyNormalConsequence.html',
+                          {'page': 'fullyConse', 'data': data, 'proposalID': proposalID, 'ass': rwAss,
+                           'info': request.session, 'noti': noti, 'countnoti': countnoti, 'count': count,'isTank': isBottom,
+                                                                   'isShell': isShell})
+    except Exception as e:
+        print(e)
         raise Http404
+
+def AreaBasedCoF(request, proposalID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    data = {}
+    try:
+        rwAss = models.RwAssessment.objects.get(id=proposalID)
+        component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        if component.componenttypeid_id == 12 or component.componenttypeid_id == 15:
+            isBottom = 1
+        else:
+            isBottom = 0
+        if component.componenttypeid_id == 9 or component.componenttypeid_id == 13:
+            isShell = 1
+        else:
+            isShell = 0
+        ca = models.RwCaLevel1.objects.get(id=proposalID)
+        apiComType = models.ApiComponentType.objects.get(apicomponenttypeid=component.apicomponenttypeid)
+        inputCa = models.RwInputCaLevel1.objects.get(id=proposalID)
+        rwcomponent = models.RwComponent.objects.get(id=proposalID)
+        rwstream = models.RwStream.objects.get(id=proposalID)
+        rwcalevel1 = models.RwCaLevel1.objects.get(id=proposalID)
+        rwcofholesize = models.RwFullCoFHoleSize.objects.get(id=proposalID)
+        data['ca_final'] = ca.ca_final
+        data['fcof_category'] = ca.fcof_category
+        data['api_comp_type'] = apiComType.apicomponenttypename
+        data['diameter'] = rwcomponent.nominaldiameter
+        data['liquidlevel'] = rwstream.liquidlevel
+        data['componentvolume'] = rwcomponent.componentvolume
+        data['model_fluid'] = inputCa.api_fluid
+        data['toxic_fluid'] = inputCa.toxic_fluid
+        data['toxic_fluid_percentage'] = inputCa.toxic_percent
+        data['phase_fluid_storage'] = rwstream.storagephase
+        data['max_operating_temp'] = rwstream. maxoperatingtemperature
+        data['max_operating_pressure'] = rwstream.maxoperatingpressure * 1000
+        data['ambient_state'] = rwcalevel1.ambient
+        data['ideal_gas'] = rwcalevel1.ideal_gas
+        data['ideal_gas_ratio'] = rwcalevel1.ideal_gas_ratio
+        data['release_magnitude'] = rwcalevel1.fact_di
+        data['liquid_density'] = rwcalevel1.liquid_density
+        data['CA_reduction'] = rwcalevel1.fact_mit
+        data['auto_ignition'] = rwcalevel1.auto_ignition
+        data['release_phase'] = rwcalevel1.release_phase
+        data['mw'] = rwcalevel1.mw
+        data['nbp'] = rwcalevel1.nbp
+        data['api_com_type'] =models.ApiComponentType.objects.get(apicomponenttypeid=component.apicomponenttypeid).apicomponenttypename
+        data['model_fluid_type'] = rwcalevel1.model_fluid_type
+        data['toxic_fluid_type'] = rwcalevel1.toxic_fluid_type
+        data['an_small'] = roundData.roundFC(rwcofholesize.an_small)
+        data['an_medium'] = roundData.roundFC(rwcofholesize.an_medium)
+        data['an_large'] = roundData.roundFC(rwcofholesize.an_large)
+        data['an_rupture'] = roundData.roundFC(rwcofholesize.an_rupture)
+        data['wn_small'] = roundData.roundFC(rwcofholesize.wn_small)
+        data['wn_medium'] = roundData.roundFC(rwcofholesize.wn_medium)
+        data['wn_large'] = roundData.roundFC(rwcofholesize.wn_large)
+        data['wn_rupture'] = roundData.roundFC(rwcofholesize.wn_rupture)
+        data['gff_n_small'] = rwcofholesize.gff_small
+        data['gff_n_medium'] = rwcofholesize.gff_medium
+        data['gff_n_large'] = rwcofholesize.gff_large
+        data['gff_n_rupture'] = rwcofholesize.gff_rupture
+        data['mass_add_n_small'] = roundData.roundFC(rwcofholesize.mass_add_n_small)
+        data['mass_add_n_medium'] = roundData.roundFC(rwcofholesize.mass_add_n_medium)
+        data['mass_add_n_large'] = roundData.roundFC(rwcofholesize.mass_add_n_large)
+        data['mass_add_n_rupture'] = roundData.roundFC(rwcofholesize.mass_add_n_rupture)
+        data['mass_avail_n_small'] = roundData.roundFC(rwcofholesize.mass_avail_n_small)
+        data['mass_avail_n_medium'] = roundData.roundFC(rwcofholesize.mass_avail_n_medium)
+        data['mass_avail_n_large'] = roundData.roundFC(rwcofholesize.mass_avail_n_large)
+        data['mass_avail_n_rupture'] = roundData.roundFC(rwcofholesize.mass_avail_n_rupture)
+        data['t_n_small'] = roundData.roundFC(rwcofholesize.t_n_small)
+        data['t_n_medium'] = roundData.roundFC(rwcofholesize.t_n_medium)
+        data['t_n_large'] = roundData.roundFC(rwcofholesize.t_n_large)
+        data['t_n_rupture'] = roundData.roundFC(rwcofholesize.t_n_rupture)
+        data['releasetype_small'] = rwcofholesize.releasetype_small[0:8]
+        data['releasetype_medium'] = rwcofholesize.releasetype_medium[0:8]
+        data['releasetype_large'] = rwcofholesize.releasetype_large[0:8]
+        data['releasetype_rupture'] = rwcofholesize.releasetype_rupture[0:8]
+        data['ld_max_n_small'] = rwcofholesize.ld_max_n_small
+        data['ld_max_n_medium'] = rwcofholesize.ld_max_n_medium
+        data['ld_max_n_large'] = rwcofholesize.ld_max_n_large
+        data['ld_max_n_rupture'] = rwcofholesize.ld_max_n_rupture
+        data['rate_n_small'] = roundData.roundFC(rwcofholesize.rate_n_small)
+        data['rate_n_medium'] = roundData.roundFC(rwcofholesize.rate_n_medium)
+        data['rate_n_large'] = roundData.roundFC(rwcofholesize.rate_n_large)
+        data['rate_n_rupture'] = roundData.roundFC(rwcofholesize.rate_n_rupture)
+        data['ld_n_small'] = roundData.roundFC(rwcofholesize.ld_n_small)
+        data['ld_n_medium'] = roundData.roundFC(rwcofholesize.ld_n_medium)
+        data['ld_n_large'] = roundData.roundFC(rwcofholesize.ld_n_large)
+        data['ld_n_rupture'] = roundData.roundFC(rwcofholesize.ld_n_rupture)
+        data['mass_n_small'] = roundData.roundFC(rwcofholesize.mass_n_small)
+        data['mass_n_medium'] = roundData.roundFC(rwcofholesize.mass_n_medium)
+        data['mass_n_large'] = roundData.roundFC(rwcofholesize.mass_n_large)
+        data['mass_n_rupture'] = roundData.roundFC(rwcofholesize.mass_n_rupture)
+
+        caflammable = CA_Flammable.CA_Flammable(data['toxic_fluid'],data['phase_fluid_storage'],inputCa.mitigation_system,proposalID,rwstream.minoperatingtemperature + 273,
+                                                data['api_com_type'],data['toxic_fluid_percentage'])
+        catoxic = ToxicConsequenceArea.CA_Toxic(proposalID,inputCa.toxic_fluid,caflammable.ReleasePhase(),data['toxic_fluid_percentage'],data['api_com_type'])
+
+        #Consequence Analysis Properties
+        data['Phase_of_Fluid'] = caflammable.ambient()
+        data['release_phase_n'] = caflammable.ReleasePhase()
+        #flammable CA
+        data['cainl_cmd_a']=caflammable.a_cmd(1)
+        data['cainl_cmd_b'] = caflammable.b_cmd(1)
+        data['cail_cmd_a'] = caflammable.a_cmd(2)
+        data['cail_cmd_b'] = caflammable.b_cmd(2)
+        data['iainl_cmd_a'] = caflammable.a_cmd(3)
+        data['iainl_cmd_b'] = caflammable.b_cmd(3)
+        data['iail_cmd_a'] = caflammable.a_cmd(4)
+        data['iail_cmd_b'] = caflammable.b_cmd(4)
+
+        data['cainl_inj_a'] = caflammable.a_inj(1)
+        data['cainl_inj_b'] = caflammable.b_inj(1)
+        data['cail_inj_a'] = caflammable.a_inj(2)
+        data['cail_inj_b'] = caflammable.b_inj(2)
+        data['iainl_inj_a'] = caflammable.a_inj(3)
+        data['iainl_inj_b'] = caflammable.b_inj(3)
+        data['iail_inj_a'] = caflammable.a_inj(4)
+        data['iail_inj_b'] = caflammable.b_inj(4)
+
+        data['cainl_cmd_cont_small'] = roundData.roundFC(caflammable.ca_cmdn_cont(1, 1))
+        data['cainl_cmd_cont_medium'] = roundData.roundFC(caflammable.ca_cmdn_cont(1, 2))
+        data['cainl_cmd_cont_large'] = roundData.roundFC(caflammable.ca_cmdn_cont(1, 3))
+        data['cainl_cmd_cont_rupture'] = roundData.roundFC(caflammable.ca_cmdn_cont(1, 4))
+        data['cail_cmd_cont_small'] = roundData.roundFC(caflammable.ca_cmdn_cont(2, 1))
+        data['cail_cmd_cont_medium'] = roundData.roundFC(caflammable.ca_cmdn_cont(2, 2))
+        data['cail_cmd_cont_large'] = roundData.roundFC(caflammable.ca_cmdn_cont(2, 3))
+        data['cail_cmd_cont_rupture'] = roundData.roundFC(caflammable.ca_cmdn_cont(2, 4))
+        data['iainl_cmd_cont_small'] = roundData.roundFC(caflammable.ca_cmdn_inst(3, 1))
+        data['iainl_cmd_cont_medium'] = roundData.roundFC(caflammable.ca_cmdn_inst(3, 2))
+        data['iainl_cmd_cont_large'] = roundData.roundFC(caflammable.ca_cmdn_inst(3, 3))
+        data['iainl_cmd_cont_rupture'] = roundData.roundFC(caflammable.ca_cmdn_inst(3, 4))
+        data['iail_cmd_cont_small'] = roundData.roundFC(caflammable.ca_cmdn_inst(4, 1))
+        data['iail_cmd_cont_medium'] = roundData.roundFC(caflammable.ca_cmdn_inst(4, 2))
+        data['iail_cmd_cont_large'] = roundData.roundFC(caflammable.ca_cmdn_inst(4, 3))
+        data['iail_cmd_cont_rupture'] = roundData.roundFC(caflammable.ca_cmdn_inst(4, 4))
+
+        data['cainl_inj_cont_small'] = roundData.roundFC(caflammable.ca_injn_cont(1, 1))
+        data['cainl_inj_cont_medium'] = roundData.roundFC(caflammable.ca_injn_cont(1, 2))
+        data['cainl_inj_cont_large'] = roundData.roundFC(caflammable.ca_injn_cont(1, 3))
+        data['cainl_inj_cont_rupture'] = roundData.roundFC(caflammable.ca_injn_cont(1, 4))
+        data['cail_inj_cont_small'] = roundData.roundFC(caflammable.ca_injn_cont(2, 1))
+        data['cail_inj_cont_medium'] = roundData.roundFC(caflammable.ca_injn_cont(2, 2))
+        data['cail_inj_cont_large'] = roundData.roundFC(caflammable.ca_injn_cont(2, 3))
+        data['cail_inj_cont_rupture'] = roundData.roundFC(caflammable.ca_injn_cont(2, 4))
+        data['iainl_inj_cont_small'] = roundData.roundFC(caflammable.ca_injn_inst(3, 1))
+        data['iainl_inj_cont_medium'] = roundData.roundFC(caflammable.ca_injn_inst(3, 2))
+        data['iainl_inj_cont_large'] = roundData.roundFC(caflammable.ca_injn_inst(3, 3))
+        data['iainl_inj_cont_rupture'] = roundData.roundFC(caflammable.ca_injn_inst(3, 4))
+        data['iail_inj_cont_small'] = roundData.roundFC(caflammable.ca_injn_inst(4, 1))
+        data['iail_inj_cont_medium'] = roundData.roundFC(caflammable.ca_injn_inst(4, 2))
+        data['iail_inj_cont_large'] = roundData.roundFC(caflammable.ca_injn_inst(4, 3))
+        data['iail_inj_cont_rupture'] = roundData.roundFC(caflammable.ca_injn_inst(4, 4))
+
+        data['blemding_cmd_ainl_small'] = roundData.roundFC(caflammable.CA_AINL_CMD_n(1))
+        data['blemding_cmd_ainl_medium'] = roundData.roundFC(caflammable.CA_AINL_CMD_n(2))
+        data['blemding_cmd_ainl_large'] = roundData.roundFC(caflammable.CA_AINL_CMD_n(3))
+        data['blemding_cmd_ainl_rupture'] = roundData.roundFC(caflammable.CA_AINL_CMD_n(4))
+
+        data['blemding_cmd_ail_small'] = roundData.roundFC(caflammable.CA_AIL_CMD_n(1))
+        data['blemding_cmd_ail_medium'] = roundData.roundFC(caflammable.CA_AIL_CMD_n(2))
+        data['blemding_cmd_ail_large'] = roundData.roundFC(caflammable.CA_AIL_CMD_n(3))
+        data['blemding_cmd_ail_rupture'] = roundData.roundFC(caflammable.CA_AIL_CMD_n(4))
+
+        data['blemding_inj_ainl_small'] = roundData.roundFC(caflammable.CA_AINL_INJ_n(1))
+        data['blemding_inj_ainl_medium'] = roundData.roundFC(caflammable.CA_AINL_INJ_n(2))
+        data['blemding_inj_ainl_large'] = roundData.roundFC(caflammable.CA_AINL_INJ_n(3))
+        data['blemding_inj_ainl_rupture'] = roundData.roundFC(caflammable.CA_AINL_INJ_n(4))
+
+        data['blemding_inj_ail_small'] = roundData.roundFC(caflammable.CA_AIL_INJ_n(1))
+        data['blemding_inj_ail_medium'] = roundData.roundFC(caflammable.CA_AIL_INJ_n(2))
+        data['blemding_inj_ail_large'] = roundData.roundFC(caflammable.CA_AIL_INJ_n(3))
+        data['blemding_inj_ail_rupture'] = roundData.roundFC(caflammable.CA_AIL_INJ_n(4))
+
+        data['ALT_cmd_small'] = roundData.roundFC(caflammable.CA_Flam_Cmd_n(1))
+        data['ALT_cmd_medium'] = roundData.roundFC(caflammable.CA_Flam_Cmd_n(2))
+        data['ALT_cmd_large'] = roundData.roundFC(caflammable.CA_Flam_Cmd_n(3))
+        data['ALT_cmd_rupture'] = roundData.roundFC(caflammable.CA_Flam_Cmd_n(4))
+
+        data['ALT_inj_small'] = roundData.roundFC(caflammable.CA_Flam_inj_n(1))
+        data['ALT_inj_medium'] = roundData.roundFC(caflammable.CA_Flam_inj_n(2))
+        data['ALT_inj_large'] = roundData.roundFC(caflammable.CA_Flam_inj_n(3))
+        data['ALT_inj_rupture'] = roundData.roundFC(caflammable.CA_Flam_inj_n(4))
+
+
+        data['eneff_n_small'] = rwcofholesize.eneff_n_small
+        data['eneff_n_medium'] = rwcofholesize.eneff_n_medium
+        data['eneff_n_large'] = rwcofholesize.eneff_n_large
+        data['eneff_n_rupture'] = rwcofholesize.eneff_n_rupture
+        data['factIC_n_small'] = roundData.roundFC(rwcofholesize.factIC_n_small)
+        data['factIC_n_medium'] = roundData.roundFC(rwcofholesize.factIC_n_medium)
+        data['factIC_n_large'] = roundData.roundFC(rwcofholesize.factIC_n_large)
+        data['factIC_n_rupture'] = roundData.roundFC(rwcofholesize.factIC_n_rupture)
+
+        data['ca_flam_cmd'] = roundData.roundFC(caflammable.CA_Flam_Cmd())
+        data['ca_flam_inj'] = roundData.roundFC(caflammable.CA_Flam_inj())
+        #toxic
+        data['ld_tox_small']=roundData.roundFC(catoxic.ld_tox_n(1))
+        data['ld_tox_medium'] = roundData.roundFC(catoxic.ld_tox_n(2))
+        data['ld_tox_large']=roundData.roundFC(catoxic.ld_tox_n(3))
+        data['ld_tox_rupture'] = roundData.roundFC(catoxic.ld_tox_n(4))
+        data['Cont_C_small'] = catoxic.ContantC(1)
+        data['Cont_C_medium'] = catoxic.ContantC(2)
+        data['Cont_C_large'] = catoxic.ContantC(3)
+        data['Cont_C_rupture'] = catoxic.ContantC(4)
+        data['Cont_D_small'] = catoxic.ContantD(1)
+        data['Cont_D_medium'] = catoxic.ContantD(2)
+        data['Cont_D_large'] = catoxic.ContantD(3)
+        data['Cont_D_rupture'] = catoxic.ContantD(4)
+        data['Cont_E_small'] = catoxic.ContantE(1)
+        data['Cont_E_medium'] = catoxic.ContantE(2)
+        data['Cont_E_large'] = catoxic.ContantE(3)
+        data['Cont_E_rupture'] = catoxic.ContantE(4)
+        data['Cont_F_small'] = catoxic.ContantF(1)
+        data['Cont_F_medium'] = catoxic.ContantF(2)
+        data['Cont_F_large'] = catoxic.ContantF(3)
+        data['Cont_F_rupture'] = catoxic.ContantF(4)
+
+        data['rate_tox_small'] = roundData.roundFC(catoxic.Rate_tox_n(1))
+        data['rate_tox_medium'] = roundData.roundFC(catoxic.Rate_tox_n(2))
+        data['rate_tox_large'] = roundData.roundFC(catoxic.Rate_tox_n(3))
+        data['rate_tox_rupture'] = roundData.roundFC(catoxic.Rate_tox_n(4))
+
+        data['mass_tox_small'] = roundData.roundFC(catoxic.Mass_tox_n(1))
+        data['mass_tox_medium'] = roundData.roundFC(catoxic.Mass_tox_n(2))
+        data['mass_tox_large'] = roundData.roundFC(catoxic.Mass_tox_n(3))
+        data['mass_tox_rupture'] = roundData.roundFC(catoxic.Mass_tox_n(4))
+
+        data['toxic_ca_small'] = roundData.roundFC(catoxic.CA_toxic(1))
+        data['toxic_ca_medium'] = roundData.roundFC(catoxic.CA_toxic(2))
+        data['toxic_ca_large'] = roundData.roundFC(catoxic.CA_toxic(3))
+        data['toxic_ca_rupture'] = roundData.roundFC(catoxic.CA_toxic(4))
+
+        data['CA_toxic_inj'] = roundData.roundFC(catoxic.CA_toxic_inj())
+        data['CA_total'] = roundData.roundFC(catoxic.CA_total(data['ca_flam_cmd'],data['ca_flam_inj']))
+        data['CA_Category'] = catoxic.CA_Category(data['ca_flam_cmd'],data['ca_flam_inj'])
+    except Exception as e:
+        print(e)
+    return render(request, 'FacilityUI/risk_summary/areaBasedCoFforNormal.html',{'page':'areaBasedCoF','noti':noti, 'countnoti':countnoti,'count':count,'proposalID':proposalID,'ass':rwAss,'data': data,'info':request.session,'isTank': isBottom,
+                                                                   'isShell': isShell})
+
 def RiskChart(request, proposalID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
                                           Q(Is_see=0)).count()
+    list = []
+    time = []
+    listDamage = []
+    OldProsal = 0
+    thiningToTal = []
+    ext = []
+    scc = []
+    htha = []
+    brit = []
+    pipe = []
     try:
-        rwAssessment = models.RwAssessment.objects.get(id= proposalID)
-        rwFullpof = models.RwFullPof.objects.get(id= proposalID)
-        rwFullcof = models.RwFullFcof.objects.get(id= proposalID)
-        risk = rwFullpof.pofap1 * rwFullcof.fcofvalue
-        chart = models.RwDataChart.objects.get(id= proposalID)
+        listDamage = ReCalculate.caculateRiskChart(proposalID)
+        for a in listDamage[0]:
+            thiningToTal.append(a)
+        for a in listDamage[1]:
+            ext.append(a)
+        for a in listDamage[2]:
+            scc.append(a)
+        for a in listDamage[3]:
+            htha.append(a)
+        for a in listDamage[4]:
+            brit.append(a)
+        for a in listDamage[5]:
+            pipe.append(a)
+
+        rwAssesmentAll = models.RwAssessment.objects.all()
+        rwAssessment = models.RwAssessment.objects.get(id=proposalID)
+        comp = models.ComponentMaster.objects.get(componentid=rwAssessment.componentid_id)
+        # print("1")
         assessmentDate = rwAssessment.assessmentdate
-        dataChart = [risk, chart.riskage1, chart.riskage2, chart.riskage3, chart.riskage4, chart.riskage5, chart.riskage6,
+        timerNew = assessmentDate.year*365+assessmentDate.month*30+assessmentDate.day
+        # print(timerNew)
+        for a in rwAssesmentAll:
+            if(a.componentid_id == comp.componentid):
+                b = a.assessmentdate
+                timerOld = b.year*365+b.month*30+b.day
+                print(timerOld)
+                H = timerNew - timerOld
+                if(a.id!=proposalID and H>0):
+                    list.append(a)
+                    time.append(H)
+        # print(list)
+        # print(time)
+        # datanew
+        rwFullpof = models.RwFullPof.objects.get(id=proposalID)
+        rwFullcof = models.RwFullFcof.objects.get(id=proposalID)
+        risk = rwFullpof.pofap1 * rwFullcof.fcofvalue
+        chart = models.RwDataChart.objects.get(id=proposalID)
+        assessmentDate = rwAssessment.assessmentdate
+        dataChart = [risk, chart.riskage1, chart.riskage2, chart.riskage3, chart.riskage4, chart.riskage5,
+                     chart.riskage6,
                      chart.riskage7, chart.riskage8, chart.riskage9, chart.riskage9, chart.riskage10, chart.riskage11,
                      chart.riskage12, chart.riskage13, chart.riskage14, chart.riskage15]
-        dataLabel = [date2Str.date2str(assessmentDate), date2Str.date2str(date2Str.dateFuture(assessmentDate,1)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 2)),date2Str.date2str(date2Str.dateFuture(assessmentDate,3)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 4)),date2Str.date2str(date2Str.dateFuture(assessmentDate,5)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 6)),date2Str.date2str(date2Str.dateFuture(assessmentDate,7)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 8)),date2Str.date2str(date2Str.dateFuture(assessmentDate,9)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 10)),date2Str.date2str(date2Str.dateFuture(assessmentDate,11)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 12)),date2Str.date2str(date2Str.dateFuture(assessmentDate,13)),
-                     date2Str.date2str(date2Str.dateFuture(assessmentDate, 14))]
+        # print(dataChart)
+        # xác dịnh Olddata
+        if list:
+            for a in list:
+                b = a.assessmentdate
+                timerOld = b.year * 365 + b.month * 30 + b.day
+                H = timerNew - timerOld
+                if(H == min(time)):
+                    OldProsal = a.id
+                    OldassessmentDate=a.assessmentdate
+            # print(OldProsal)
+            # print(proposalID)
+            # dataOld
+            rwFullpofOld = models.RwFullPof.objects.get(id=OldProsal)
+            rwFullcofOld = models.RwFullFcof.objects.get(id=OldProsal)
+            riskOld = rwFullpofOld.pofap1 * rwFullcofOld.fcofvalue
+            chartOld = models.RwDataChart.objects.get(id=OldProsal)
+            dataOldChart = [riskOld, chartOld.riskage1, chartOld.riskage2, chartOld.riskage3, chartOld.riskage4,
+                            chartOld.riskage5, chartOld.riskage6,
+                            chartOld.riskage7, chartOld.riskage8, chartOld.riskage9, chartOld.riskage9,
+                            chartOld.riskage10, chartOld.riskage11,
+                            chartOld.riskage12, chartOld.riskage13, chartOld.riskage14, chartOld.riskage15]
+            dateold = OldassessmentDate.year * 365 + OldassessmentDate.month * 30 + OldassessmentDate.day
+            i = (timerNew - dateold) / 365
+            datachartCompine = dataOldChart[0:int(i)]
+            for a in dataChart:
+                datachartCompine.append(a)
+            datachartFinal = datachartCompine[0:16]
+            dataLabel = [date2Str.date2str(OldassessmentDate),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 1)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 2)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 3)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 4)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 5)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 6)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 7)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 8)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 9)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 10)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 11)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 12)),date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 13)),
+                         date2Str.date2str(date2Str.dateFuture(OldassessmentDate, 14))]
+        else:
+            dataOldChart = dataChart
+            datachartFinal = dataChart
+            dataLabel = [date2Str.date2str(assessmentDate), date2Str.date2str(date2Str.dateFuture(assessmentDate,1)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 2)),date2Str.date2str(date2Str.dateFuture(assessmentDate,3)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 4)),date2Str.date2str(date2Str.dateFuture(assessmentDate,5)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 6)),date2Str.date2str(date2Str.dateFuture(assessmentDate,7)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 8)),date2Str.date2str(date2Str.dateFuture(assessmentDate,9)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 10)),date2Str.date2str(date2Str.dateFuture(assessmentDate,11)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 12)),date2Str.date2str(date2Str.dateFuture(assessmentDate,13)),
+                         date2Str.date2str(date2Str.dateFuture(assessmentDate, 14))]
         dataTarget = [chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,
                       chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget,
                       chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget]
         endLabel = date2Str.date2str(date2Str.dateFuture(assessmentDate, 15))
-        content = {'page': 'riskChart', 'label': dataLabel, 'data':dataChart, 'target':dataTarget, 'endLabel':endLabel, 'proposalname':rwAssessment.proposalname,
-                   'proposalID':rwAssessment.id, 'componentID':rwAssessment.componentid_id,'noti':noti,'countnoti':countnoti,'count':count}
+        content = {'page': 'riskChart', 'label': dataLabel, 'data':dataOldChart,'data1': datachartFinal, 'target':dataTarget, 'endLabel':endLabel, 'proposalname':rwAssessment.proposalname,
+                   'proposalID':rwAssessment.id, 'componentID':rwAssessment.componentid_id,'noti':noti,'countnoti':countnoti,'count':count,'thiningToTal':thiningToTal,'ext':ext,'scc':scc,'htha':htha,'brit':brit,'pipe':pipe}
         return render(request, 'FacilityUI/risk_summary/riskChart.html', content)
     except Exception as e:
         print("Exception")
@@ -3309,18 +4751,28 @@ def upload(request, siteID):
 
     try:
         showcontent = "Choose plan process file"
-        if request.method =='POST' and request.FILES['myexcelFile']:
-            myfile = request.FILES['myexcelFile']
-            fs = FileSystemStorage()
-            filename = fs.save(myfile.name, myfile)
-            uploaded_file_url = fs.url(filename)
-            url_file = settings.BASE_DIR.replace('\\', '//') + str(uploaded_file_url).replace('/', '//').replace('%20', ' ')
-            ExcelImport.importPlanProcess(url_file)
-            try:
-                os.remove(url_file)
-            except OSError:
-                pass
-    except:
+        try:
+            if request.method =='POST' and request.FILES['myexcelFile']:
+                print("myexcelFile")
+                myfile = request.FILES['myexcelFile']
+                fs = FileSystemStorage()
+                filename = fs.save(myfile.name, myfile)
+                uploaded_file_url = fs.url(filename)
+                url_file = settings.BASE_DIR.replace('\\', '//') + str(uploaded_file_url).replace('/', '//').replace('%20', ' ')
+                ExcelImport.importPlanProcess(url_file)
+                try:
+                    os.remove(url_file)
+                except OSError:
+                    pass
+        except:
+            print("ko co file")
+        # try:
+        #     if request.method == 'POST' and request.FILES['myexcelScada']:
+        #         print("myexcelScada")
+        # except:
+        #     print("ko co file scada")
+    except Exception as e:
+        print(e)
         raise Http404
 
     return render(request, 'FacilityUI/facility/uploadData.html', {'siteID': siteID, 'showcontent': showcontent,'noti':noti,'countnoti':countnoti,'count':count,'info':request.session, 'page':'uploadPlan'})
@@ -3347,18 +4799,40 @@ def uploadInspPlan(request, siteID):
         raise Http404
     return render(request, 'FacilityUI/facility/uploadData.html' ,{'siteID': siteID, 'showcontent': showcontent,'noti':noti,'countnoti':countnoti,'count':count,'info':request.session, 'page':'uploadHistory'})
 
+# def uploadSCADA(request, siteID):
+#     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+#     countnoti = noti.filter(state=0).count()
+#     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+#                                           Q(Is_see=0)).count()
+#
+#     return render(request, 'FacilityUI/facility/uploadSCADA.html',
+#                   {'siteID': siteID, 'noti': noti, 'countnoti': countnoti, 'count': count,
+#                    'info': request.session, 'page': 'uploadHistory'})
 ############### Dang Nhap Dang Suat #################
-def RegularVerification():
-    print(1)
-    obj = REGULAR()
-    obj.regular_1()
+# def RegularVerification():
+#     print(1)
+#     obj = REGULAR()
+#     obj.regular_1()
+
+def ManagementSystems(request,facilityID):
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    faci = models.Facility.objects.get(facilityid=facilityID)
+    if request.method == 'POST':
+        print("1")
+    return render(request,'FacilityUI/equipment/ManagementSystems.html',{'page':'mana','facilityID':facilityID, 'siteID':faci.siteid_id,'count':count,'info':request.session,'noti':noti,'countnoti':countnoti})
 
 def signin(request):
     error = ''
     try:
-        t1 = threading.Thread(target=RegularVerification)
-        t1.setDaemon(True)
-        t1.start()
+        # t1 = threading.Thread(target=RegularVerification)
+        # t1.setDaemon(True)
+        # t1.start()
+        t2 = threading.Thread(target=subscribe.SubDATA)
+        t2.setDaemon(True)
+        t2.start()
         if request.session.has_key('id'):
             if request.session['kind']=='citizen':
                 return redirect('citizenHome')
@@ -3387,7 +4861,7 @@ def signin(request):
                         facilityID = models.Sites.objects.filter(userID_id=request.session['id'])[0].siteid
                         return redirect('facilitiesDisplay',facilityID)
                     else:
-                        return redirect('manager',3)
+                        return redirect('managerhomedetail',3)
                 else:
                     error="Tài khoản hoặc mật khẩu không đúng"
             return render(request,'Home/index.html',{'error':error})
@@ -3801,6 +5275,29 @@ def activate(request, uidb64, token):
         return HttpResponse("Can't activate now, please try again later or contact us")
 
 ################ Manager UI Control ###################
+def ManagerHomeDetail(request,siteID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    return render(request, 'ManagerUI/Home_Manager.html', {'page':'managerHomeDetail','siteID':siteID,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+# NOTE: page: managerHomeDetail dùng cho baseMN khi so sanh, khác với name: managerhomedetail trong view
+def CalculateFunctionManager(request,siteID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    # data = ListNormalProposalFofInpsection(siteID=siteID, facilityID=0, equimentID=0)
+    # dataTank = ListTankProposalForInpsection(siteID=siteID, facilityID=0, equimentID=0)
+    return render(request, 'ManagerUI/Calculate_Function_Manager.html', {'page':'calculateFunctionManager','siteID':siteID,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+def ToolManager(request,siteID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    return render(request, 'ManagerUI/Tool_Manager.html',
+                  {'page': 'toolManager', 'siteID': siteID, 'info': request.session, 'noti': noti,
+                   'countnoti': countnoti, 'count': count})
 def ManagerHome(request, siteID):
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email), Q(Is_see=0)).count()
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
@@ -3812,6 +5309,7 @@ def ManagerHome(request, siteID):
         for a in data:
             dataF = {}
             dataF['ID'] = a.siteid
+            dataF['CreatedTime'] = a.create
             dataF['SideName'] = a.sitename
             risk.append(dataF)
         pagiFaci = Paginator(risk, 25)
@@ -3839,6 +5337,7 @@ def ListFacilitiesMana(request, siteID):
             dataF = {}
             risTarget = models.FacilityRiskTarget.objects.get(facilityid= a.facilityid)
             dataF['ID'] = a.facilityid
+            dataF['CreatedTime'] = a.create
             dataF['FacilitiName'] = a.facilityname
             dataF['ManagementFactor'] = a.managementfactor
             dataF['RiskTarget'] = risTarget.risktarget_fc
@@ -3862,7 +5361,6 @@ def ListEquipmentMana(request, facilityID):
                                           Q(Is_see=0)).count()
     try:
         faci = models.Facility.objects.get(facilityid= facilityID)
-        # print(faci.si)
         si=models.Sites.objects.get(siteid=faci.siteid_id)
         data = models.EquipmentMaster.objects.filter(facilityid= facilityID)
         pagiEquip = Paginator(data,25)
@@ -3888,6 +5386,8 @@ def ListComponentMana(request, equipmentID):
         data = models.ComponentMaster.objects.filter(equipmentid= equipmentID)
         pagiComp = Paginator(data,25)
         pageComp = request.GET.get('page',1)
+        print("hihihihihihihihi")
+        print(faci.siteid_id)
         try:
             obj = pagiComp.page(pageComp)
         except PageNotAnInteger:
@@ -3896,7 +5396,7 @@ def ListComponentMana(request, equipmentID):
             obj = pageComp.page(pagiComp.num_pages)
     except:
         raise Http404
-    return render(request, 'ManagerUI/component_List.html', {'page':'listComp', 'obj':obj, 'equipmentID':equipmentID, 'facilityID': eq.facilityid_id,'eq':eq,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
+    return render(request, 'ManagerUI/component_List.html', {'page':'listComp', 'obj':obj, 'equipmentID':equipmentID, 'facilityID': eq.facilityid_id,'siteID':faci.siteid_id,'eq':eq,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
 def ListManufactureMana(request, siteID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -3974,9 +5474,8 @@ def ListProposalMana(request, componentID):
             isshell = 0
     except:
         raise Http404
-    return render(request, 'ManagerUI/proposal_List.html', {'page':'listProposal','obj':obj, 'istank': istank, 'isshell':isshell,
-                                                                            'componentID':componentID,
-                                                                            'equipmentID':comp.equipmentid_id,'comp':comp,'equip':equip,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
+    return render(request, 'ManagerUI/proposal_List.html', {'page':'listProposal','obj':obj, 'istank': istank, 'isshell':isshell, 'facilityID': equip.facilityid_id,'componentID':componentID,'siteID': faci.siteid_id,
+                                                            'equipmentID':comp.equipmentid_id,'comp':comp,'equip':equip,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
 def ListDesignCodeMana(request, siteID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -3995,6 +5494,7 @@ def ListDesignCodeMana(request, siteID):
     except:
         raise Http404
     return render(request, 'ManagerUI/designcode_List.html', {'page':'listDesign', 'obj':obj, 'siteID':siteID,'info':request.session,'noti':noti,'countnoti':countnoti,'count':count})
+
 def FullyDamageFactorMana(request, proposalID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -4005,6 +5505,8 @@ def FullyDamageFactorMana(request, proposalID):
         rwAss = models.RwAssessment.objects.get(id= proposalID)
         data={}
         component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        equip = models.EquipmentMaster.objects.get(equipmentid=component.equipmentid_id)
+        siteID = equip.siteid_id
         if component.componenttypeid_id == 8 or component.componenttypeid_id == 12 or component.componenttypeid_id == 14 or component.componenttypeid_id == 15:
             isTank = 1
         else:
@@ -4057,7 +5559,7 @@ def FullyDamageFactorMana(request, proposalID):
     except Exception as e:
         print(e)
         raise Http404
-    return render(request, 'ManagerUI/RiskSummaryMana/FullDF.html', {'page':'damageFactor', 'obj':data, 'assess': rwAss, 'isTank': isTank,
+    return render(request, 'ManagerUI/RiskSummaryMana/FullDF.html', {'page':'damageFactor', 'obj':data, 'assess': rwAss, 'isTank': isTank,'siteID':siteID,
                                                                    'isShell': isShell, 'proposalID':proposalID,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
 def FullyConsequenceMana(request, proposalID):
     data = {}
@@ -4068,6 +5570,8 @@ def FullyConsequenceMana(request, proposalID):
     try:
         rwAss = models.RwAssessment.objects.get(id=proposalID)
         component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+        equip = models.EquipmentMaster.objects.get(equipmentid=component.equipmentid_id)
+        siteID = equip.siteid_id
         if component.componenttypeid_id == 12 or component.componenttypeid_id == 15:
             isBottom = 1
         else:
@@ -4160,9 +5664,10 @@ def FullyConsequenceMana(request, proposalID):
             data['fcof_category'] = ca.fcof_category
             if request.method == 'POST':
                 return redirect('verifullyConsequenceMana', proposalID)
-            return render(request, 'ManagerUI/RiskSummaryMana/fullyNormalConsequenceMana.html', {'page':'fullyConse', 'data': data, 'proposalID':proposalID, 'ass':rwAss,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
+            return render(request, 'ManagerUI/RiskSummaryMana/fullyNormalConsequenceMana.html', {'page':'fullyConse', 'data': data, 'proposalID':proposalID, 'ass':rwAss,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session,'siteID':siteID})
     except:
         raise Http404
+
 def RiskChartMana(request, proposalID):
     noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
     countnoti = noti.filter(state=0).count()
@@ -4170,7 +5675,9 @@ def RiskChartMana(request, proposalID):
                                           Q(Is_see=0)).count()
     try:
         rwAssessment = models.RwAssessment.objects.get(id= proposalID)
-        print(rwAssessment)
+        component = models.ComponentMaster.objects.get(componentid=rwAssessment.componentid_id)
+        equip = models.EquipmentMaster.objects.get(equipmentid=component.equipmentid_id)
+        siteID = equip.siteid_id
         rwFullpof = models.RwFullPof.objects.get(id= proposalID)
         rwFullcof = models.RwFullFcof.objects.get(id= proposalID)
         risk = rwFullpof.pofap1 * rwFullcof.fcofvalue
@@ -4192,7 +5699,7 @@ def RiskChartMana(request, proposalID):
                       chart.risktarget,chart.risktarget,chart.risktarget,chart.risktarget]
         endLabel = date2Str.date2str(date2Str.dateFuture(assessmentDate, 15))
         content = {'page':'riskChart', 'label': dataLabel, 'data':dataChart, 'target':dataTarget, 'endLabel':endLabel, 'proposalname':rwAssessment.proposalname,
-                   'proposalID':rwAssessment.id, 'componentID':rwAssessment.componentid_id,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session}
+                   'proposalID':rwAssessment.id, 'componentID':rwAssessment.componentid_id,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session,'siteID':siteID}
         return render(request, 'ManagerUI/RiskSummaryMana/riskChartMana.html', content)
     except:
         raise Http404
@@ -4201,6 +5708,10 @@ def RiskMatrixMana(request, proposalID):
     countnoti = noti.filter(state=0).count()
     count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
                                           Q(Is_see=0)).count()
+    rwAss = models.RwAssessment.objects.get(id=proposalID)
+    component = models.ComponentMaster.objects.get(componentid=rwAss.componentid_id)
+    equip = models.EquipmentMaster.objects.get(equipmentid=component.equipmentid_id)
+    siteID = equip.siteid_id
     try:
         locatAPI1 = {}
         locatAPI2 = {}
@@ -4234,7 +5745,7 @@ def RiskMatrixMana(request, proposalID):
     except:
         raise Http404
     return render(request, 'ManagerUI/RiskSummaryMana/RiskMatrixMana.html',{'page':'riskMatrix', 'API1':location.locat(df.totaldfap1, ca.fcofvalue), 'API2':location.locat(df.totaldfap2, ca.fcofvalue),
-                                                                      'API3':location.locat(df.totaldfap3, ca.fcofvalue),'DF1': DF1,'DF2': DF2,'DF3': DF3, 'ca':Ca,
+                                                                      'API3':location.locat(df.totaldfap3, ca.fcofvalue),'DF1': DF1,'DF2': DF2,'DF3': DF3, 'ca':Ca,'siteID':siteID,
                                                                       'ass':rwAss,'isTank': isTank, 'isShell': isShell, 'df':df, 'proposalID':proposalID,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
 def Inputdata(request, proposalID):
     try:
@@ -4485,7 +5996,6 @@ def Inputdata(request, proposalID):
 
             if request.POST.get('InternalCladding'):
                 InternalCladding = 1
-                print("InternalCladding = 1")
             else:
                 InternalCladding = 0
 
@@ -4818,7 +6328,6 @@ def VeriFullyDamageFactorMana(request, proposalID):
             veri.save()
             some_var = request.POST.getlist('check')
             for some_var in some_var:
-                print(some_var)
                 vericontent=models.VeriContent(Verification_id=veri.id,content=some_var)
                 vericontent.save()
             return HttpResponse("Bạn đã yêu cầu kiểm định thành công")
@@ -5324,7 +6833,6 @@ def RiskChartCitizen(request, proposalID):
         equip = models.EquipmentMaster.objects.get(equipmentid=component.equipmentid_id)
         faci = models.Facility.objects.get(facilityid=equip.facilityid_id)
         si = models.Sites.objects.get(siteid=faci.siteid_id)
-        print(rwAssessment)
         rwFullpof = models.RwFullPof.objects.get(id= proposalID)
         rwFullcof = models.RwFullFcof.objects.get(id= proposalID)
         risk = rwFullpof.pofap1 * rwFullcof.fcofvalue
@@ -5366,6 +6874,7 @@ def NewSensor(request,componentID):
         data = {}
         if(sensordata.count()==0):
             if request.method == 'POST':
+                print(site.siteid)
                 gateway = models.ZGateWay.objects.filter(siteid=site.siteid)[0].idgateway
                 print(gateway)
                 print("2")
@@ -5378,9 +6887,230 @@ def NewSensor(request,componentID):
                            'equipmentID': comp.equipmentid_id, 'info': request.session, 'noti': noti,
                            'countnoti': countnoti, 'count': count})
         else:
+            packagedata = models.PackageSensor.objects.filter(idsensor=sensordata[0].idsensor)
+            if '_delete' in request.POST:
+                for pac in packagedata:
+                    if request.POST.get('%d' % pac.idpackage):
+                        pac.delete()
+                return redirect('newsensor', componentID=componentID)
+            if '_new' in request.POST:
+                print("okok")
+                try:
+                    print("1")
+                    thingsboard = subscribe_thingsboard.Subscribe_thingsboard(componentID)
+                    thingsboard.SUBTHINGSBOARD()
+                except:
+                    print("connect error")
+                return redirect('newsensor', componentID=componentID)
+            if '_edit' in request.POST:
+                return redirect('sensorchart', componentID)
             return render(request, 'FacilityUI/proposal/SensorConnect.html',{'sensorName':sensordata[0].Name,'comp': comp, 'equip': equip, 'faci': faci, 'page': 'newsensor', 'componentID': componentID,
                            'equipmentID': comp.equipmentid_id, 'info': request.session, 'noti': noti,
-                           'countnoti': countnoti, 'count': count})
+                           'countnoti': countnoti, 'count': count,'packagedata':packagedata})
     except Exception as e:
         print(e)
         raise Http404
+import json
+def DataChart(request,componentID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    # comp = models.ComponentMaster.objects.get(componentid=componentID)
+    # equip = models.EquipmentMaster.objects.get(equipmentid=comp.equipmentid_id)
+    # faci = models.Facility.objects.get(facilityid=equip.facilityid_id)
+    # site = models.Sites.objects.get(siteid=faci.siteid_id)
+    sensordata = models.ZSensor.objects.filter(Componentid=componentID)
+    packagedata = models.PackageSensor.objects.filter(idsensor=sensordata[0].idsensor)
+    humidity = []
+    temperature = []
+    luminance = []
+    datetimes = []
+    for da in packagedata:
+        data = json.loads(da.package)
+        humidity.append(data['humidity'])
+        temperature.append(data['temperature'])
+        luminance.append(data['luminance'])
+        datetimes.append(da.created)
+    return render(request,'FacilityUI/proposal/SensorChart.html',{'sensorName':sensordata[0].Name, 'page': 'newsensor', 'componentID': componentID,
+                           'info': request.session, 'noti': noti,
+                           'countnoti': countnoti, 'count': count,'humidity':humidity,'temperature':temperature,'luminance':luminance,'datetimes':datetimes})
+#Đạt 18/08/2020
+def ReportProposal(request, componentID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    try:
+        rwass = models.RwAssessment.objects.filter(componentid= componentID)
+        data = []
+        comp = models.ComponentMaster.objects.get(componentid= componentID)
+        equip = models.EquipmentMaster.objects.get(equipmentid= comp.equipmentid_id)
+        faci = models.Facility.objects.get(facilityid=equip.facilityid_id)
+        si=models.Sites.objects.get(siteid=faci.siteid_id)
+        tank = [8,12,14,15]
+        for a in rwass:
+            df = models.RwFullPof.objects.filter(id= a.id)
+            fc = models.RwFullFcof.objects.filter(id= a.id)
+            dm = models.RwDamageMechanism.objects.filter(id_dm= a.id)
+            obj1 = {}
+            obj1['id'] = a.id
+            obj1['name'] = a.proposalname
+            obj1['lastinsp'] = a.assessmentdate.strftime('%Y-%m-%d')
+            if df.count() != 0:
+                obj1['df'] = round(df[0].totaldfap1, 2)
+                obj1['gff'] = df[0].gfftotal
+                obj1['fms'] = df[0].fms
+            else:
+                obj1['df'] = 0
+                obj1['gff'] = 0
+                obj1['fms'] = 0
+            if fc.count() != 0:
+                obj1['fc'] = round(fc[0].fcofvalue, 2)
+            else:
+                obj1['fc'] = 0
+            if dm.count() != 0:
+                obj1['duedate'] = dm[0].inspduedate.date().strftime('%Y-%m-%d')
+            else:
+                obj1['duedate'] = (a.assessmentdate.date() + relativedelta(years=15)).strftime('%Y-%m-%d')
+                obj1['lastinsp'] = equip.commissiondate.date().strftime('%Y-%m-%d')
+            obj1['risk'] = round(obj1['df'] * obj1['gff'] * obj1['fms'] * obj1['fc'], 2)
+            data.append(obj1)
+        pagidata = Paginator(data,25)
+        pagedata = request.GET.get('page',1)
+        try:
+            obj = pagidata.page(pagedata)
+        except PageNotAnInteger:
+            obj = pagidata.page(1)
+        except EmptyPage:
+            obj = pagedata.page(pagidata.num_pages)
+
+        if comp.componenttypeid_id in tank:
+            istank = 1
+        else:
+            istank = 0
+        if comp.componenttypeid_id == 8 or comp.componenttypeid_id == 14:
+            isshell = 1
+        else:
+            isshell = 0
+    except:
+        raise Http404
+    return render(request, 'ManagerUI/Report_Proposal.html', {'page':'reportproposal','obj':obj, 'istank': istank, 'isshell':isshell,
+                                                                            'componentID':componentID,
+                                                                            'equipmentID':comp.equipmentid_id,'comp':comp,'equip':equip,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
+def base_report(request, siteID):
+    try:
+        count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),Q(Is_see=0)).count()
+    except:
+        Http404
+    return render(request, 'BaseUI/BaseWeb/basedat.html',{'siteID':siteID, 'count':count})
+def ReportMana(request):
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    # print(siteID)
+    try:
+        risk = []
+        data = models.Sites.objects.all()
+        for a in data:
+            dataF = {}
+            dataF['ID'] = a.siteid
+            dataF['CreatedTime'] = a.create
+            dataF['SiteName'] = a.sitename
+            risk.append(dataF)
+        pagiFaci = Paginator(risk, 25)
+        pageFaci = request.GET.get('page', 1)
+        try:
+            users = pagiFaci.page(pageFaci)
+        except PageNotAnInteger:
+            users = pagiFaci.page(1)
+        except EmptyPage:
+            users = pageFaci.page(pagiFaci.num_pages)
+        list=[]
+        print("hjxhjx")
+        if '_viewdetail' in request.POST:
+            print("ccacscsa")
+            for a in data:
+                if(request.POST.get('%d' %a.siteid)):
+                    dataA={}
+                    dataA['ID']=a.siteid
+                    dataA['Name'] = a.sitename
+                    list.append(dataA)
+                    print(list)
+            return redirect('facilitiesEdit', a.siteid)
+    except Exception as e:
+        print(e)
+        raise Http404
+    return render(request, 'ManagerUI/Report_Mana.html', {'page': 'reportmana', 'obj': users, 'list':list , 'data':dataF, 'count': count, 'noti': noti, 'countnoti': countnoti, 'info': request.session})
+
+def ReportFacilities(request, siteID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email), Q(Is_see=0)).count()
+    try:
+        risk = []
+        si=models.Sites.objects.get(siteid=siteID)
+        data= models.Facility.objects.filter(siteid=siteID)
+        for a in data:
+            dataF = {}
+            risTarget = models.FacilityRiskTarget.objects.get(facilityid= a.facilityid)
+            dataF['ID'] = a.facilityid
+            dataF['CreatedTime'] = a.create
+            dataF['FacilitiName'] = a.facilityname
+            dataF['ManagementFactor'] = a.managementfactor
+            dataF['RiskTarget'] = risTarget.risktarget_fc
+            risk.append(dataF)
+
+        pagiFaci = Paginator(risk, 25)
+        pageFaci = request.GET.get('page',1)
+        try:
+            users = pagiFaci.page(pageFaci)
+        except PageNotAnInteger:
+            users = pagiFaci.page(1)
+        except EmptyPage:
+            users = pageFaci.page(pagiFaci.num_pages)
+    except:
+        raise Http404
+    return render(request, 'ManagerUI/Report_Facilities.html', {'page':'reportfacilities', 'obj': users,'siteID':siteID,'count':count,'si':si,'noti':noti,'countnoti':countnoti,'info':request.session})
+def ReportEquipment(request, facilityID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    try:
+        faci = models.Facility.objects.get(facilityid= facilityID)
+        si=models.Sites.objects.get(siteid=faci.siteid_id)
+        data = models.EquipmentMaster.objects.filter(facilityid= facilityID)
+        pagiEquip = Paginator(data,25)
+        pageEquip = request.GET.get('page',1)
+        try:
+            obj = pagiEquip.page(pageEquip)
+        except PageNotAnInteger:
+            obj = pagiEquip.page(1)
+        except EmptyPage:
+            obj = pageEquip.page(pagiEquip.num_pages)
+    except:
+        raise Http404
+    return render(request, 'ManagerUI/Report_Equipment.html', {'page': 'reportequipment', 'obj':obj, 'facilityID':facilityID, 'faci':faci, 'si':si, 'count':count, 'noti':noti, 'countnoti':countnoti, 'info':request.session})
+def ReportComponent(request, equipmentID):
+    noti = models.ZNotification.objects.all().filter(id_user=request.session['id'])
+    countnoti = noti.filter(state=0).count()
+    count = models.Emailto.objects.filter(Q(Emailt=models.ZUser.objects.filter(id=request.session['id'])[0].email),
+                                          Q(Is_see=0)).count()
+    try:
+        eq = models.EquipmentMaster.objects.get(equipmentid= equipmentID)
+        faci = models.Facility.objects.get(facilityid=eq.facilityid_id)
+        si=models.Sites.objects.get(siteid=faci.siteid_id)
+        data = models.ComponentMaster.objects.filter(equipmentid= equipmentID)
+        pagiComp = Paginator(data,25)
+        pageComp = request.GET.get('page',1)
+        try:
+            obj = pagiComp.page(pageComp)
+        except PageNotAnInteger:
+            obj= pagiComp.page(1)
+        except EmptyPage:
+            obj = pageComp.page(pagiComp.num_pages)
+    except:
+        raise Http404
+    return render(request, 'ManagerUI/Report_Component.html', {'page':'reportcomponent', 'obj':obj, 'equipmentID':equipmentID, 'facilityID': eq.facilityid_id,'eq':eq,'faci':faci,'si':si,'count':count,'noti':noti,'countnoti':countnoti,'info':request.session})
